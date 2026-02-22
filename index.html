@@ -1070,7 +1070,6 @@
             return { comps: conductingComps, wireEdges: conductingEdges, totalRes: dist[endPin], hasLoad };
         }
 
-        // 核心修复1：使用真实的物理等电位网络去寻找并联（防误判本身短路的情况）
         function getZeroResCluster(graph, startPin, ignoreCompId) {
             let cluster = new Set();
             let queue = [startPin];
@@ -1079,7 +1078,7 @@
                 let u = queue.shift();
                 if(!graph[u]) continue;
                 for(let edge of graph[u]) {
-                    if(edge.comp && edge.comp.id === ignoreCompId) continue; // 屏蔽电表自身通道
+                    if(edge.comp && edge.comp.id === ignoreCompId) continue; 
                     if(edge.res === 0 && !cluster.has(edge.to)) {
                         cluster.add(edge.to);
                         queue.push(edge.to);
@@ -1089,7 +1088,6 @@
             return cluster;
         }
 
-        // 核心修复2：基于节点电压差（dijkstra dist差值）来准确测算测量电压
         function checkRangeError(battery, totalRes, dist) {
             if(!battery || totalRes <= 0 || totalRes >= 999999) return [];
             const voltage = 1.5, current = voltage / totalRes;
@@ -1145,16 +1143,13 @@
             components.forEach(c => {
                 if(c.type === 'ammeter') {
                     const cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-                    // 找出与电流表左右两端相连的物理“等电位节点集合” (不通过电流表自身)
                     let cluster1 = getZeroResCluster(graph, cp1, c.id);
                     let cluster2 = getZeroResCluster(graph, cp2, c.id);
 
-                    // 如果自身被短路，则 cluster1 中会包含 cp2，此时并非在测量用电器的“并联”
                     if (!cluster1.has(cp2)) {
                         components.forEach(mc => {
                             if(mc.type === 'bulb' || mc.type === 'resistor') {
                                 let mp1 = `${mc.id}_p1`, mp2 = `${mc.id}_p2`;
-                                // 当用电器的两端分别被囊括在了电流表的两端电位网络中时，才属于真“并联”
                                 if ((cluster1.has(mp1) && cluster2.has(mp2)) || (cluster1.has(mp2) && cluster2.has(mp1))) {
                                     allFaults.push(`电流表(${c.id})并联在了${mc.type === 'bulb' ? '灯泡' : '定值电阻'}(${mc.id})两端，应串联使用。`);
                                 }
@@ -1163,19 +1158,25 @@
                     }
                 }
                 if(c.type === 'voltmeter') {
-                    // 修复：强制将所有开关视为闭合状态，排除开关断路带来的干扰
                     let { graph: fullGraph } = buildGraph({ forceSwitchesClosed: true });
                     let distWith = dijkstra(fullGraph, batP1, batP2).dist[batP2];
                     distWith = distWith !== undefined ? distWith : Infinity;
                     
                     let { graph: testGraph } = buildGraph({ forceSwitchesClosed: true });
-                    delete testGraph[`${c.id}_p1`]; delete testGraph[`${c.id}_p2`];
-                    for(let node in testGraph) testGraph[node] = testGraph[node].filter(e => e.to !== `${c.id}_p1` && e.to !== `${c.id}_p2`);
+                    
+                    // 核心逻辑修复：不要直接销毁接线柱节点，只剪断电压表“内部”那根阻值为 999999 的虚拟线圈导线。
+                    // 这样，如果有导线在电压表的接线柱上“接力”或“借道”，依然可以通过接线柱相互导通。
+                    if (testGraph[`${c.id}_p1`]) {
+                        testGraph[`${c.id}_p1`] = testGraph[`${c.id}_p1`].filter(e => e.comp !== c);
+                    }
+                    if (testGraph[`${c.id}_p2`]) {
+                        testGraph[`${c.id}_p2`] = testGraph[`${c.id}_p2`].filter(e => e.comp !== c);
+                    }
                     
                     let distWithout = dijkstra(testGraph, batP1, batP2).dist[batP2];
                     distWithout = distWithout !== undefined ? distWithout : Infinity;
                     
-                    // 只有在原电路有通路(哪怕只过电压表)，并且移除电压表后导致电路断路时，才判定其为串联
+                    // 只有在原电路有通路，并且移除电压表内部线圈后导致整个电路断路时，才判定其为串联
                     if(distWith < Infinity && distWithout >= 999999) {
                         allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
                     }
