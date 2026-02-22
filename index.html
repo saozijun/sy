@@ -208,7 +208,6 @@
                 <option value="power_short">电源短路</option>
                 <option value="appliance_short">用电器短路</option>
                 <option value="wire_break">导线断路</option>
-                <option value="meter_reversed">电表接反</option>
                 <option value="range_error">量程选错</option>
             </select>
             <button style="width: 80px;" class="btn btn-sm btn-outline-danger" id="btn-trigger-fault">触发</button>
@@ -384,13 +383,13 @@
             },
             ammeter: {
                 width: 60, height: 60, res: 0, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/><text x="8" y="25" font-size="10">+</text><text x="48" y="25" font-size="10">-</text>`,
-                pins: [{id: 'p1', x: 0, y: 30, type:'positive'}, {id: 'p2', x: 60, y: 30, type:'negative'}]
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/>`,
+                pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             },
             voltmeter: {
                 width: 60, height: 60, res: 999999, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/><text x="8" y="25" font-size="10">+</text><text x="48" y="25" font-size="10">-</text>`,
-                pins: [{id: 'p1', x: 0, y: 30, type:'positive'}, {id: 'p2', x: 60, y: 30, type:'negative'}]
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/>`,
+                pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             }
         };
 
@@ -1136,44 +1135,6 @@
             return { comps: conductingComps, wireEdges: conductingEdges, totalRes: dist[endPin], hasLoad };
         }
 
-        function checkMeterPolarity(battery) {
-            if(!battery) return [];
-            const batP1 = `${battery.id}_p1`, batP2 = `${battery.id}_p2`;
-            let { graph } = buildGraph({}), { dist, prev } = dijkstra(graph, batP1, batP2);
-            if(dist[batP2] >= 999999) return [];
-
-            let faults = [], currentPath = new Set(), curr = batP2;
-            while(curr && curr !== batP1) { currentPath.add(curr); let p = prev[curr]; curr = p ? p.from : null; }
-            currentPath.add(batP1);
-
-            components.forEach(c => {
-                if(c.type !== 'ammeter' && c.type !== 'voltmeter') return;
-                const cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-
-                let order = [], checkCurr = batP2;
-                while(checkCurr && checkCurr !== batP1) { order.push(checkCurr); checkCurr = prev[checkCurr] ? prev[checkCurr].from : null; }
-                order.push(batP1); order.reverse();
-
-                if(c.type === 'ammeter') {
-                    if(!currentPath.has(cp1) || !currentPath.has(cp2)) return;
-                    let idx1 = order.indexOf(cp1), idx2 = order.indexOf(cp2);
-                    if(idx1 >= 0 && idx2 >= 0 && idx1 > idx2) faults.push(`电流表(${c.id})正负接线柱接反`);
-                }
-                if(c.type === 'voltmeter') {
-                    let p1Conn = [], p2Conn = [];
-                    wires.forEach(w => {
-                        if(w.p1 === cp1 || w.p2 === cp1) p1Conn.push(w.p1 === cp1 ? w.p2 : w.p1);
-                        if(w.p1 === cp2 || w.p2 === cp2) p2Conn.push(w.p1 === cp2 ? w.p2 : w.p1);
-                    });
-                    let p1Closer = Infinity, p2Closer = Infinity;
-                    p1Conn.forEach(pin => { let idx = order.indexOf(pin); if(idx >= 0 && idx < p1Closer) p1Closer = idx; });
-                    p2Conn.forEach(pin => { let idx = order.indexOf(pin); if(idx >= 0 && idx < p2Closer) p2Closer = idx; });
-                    if(p1Closer !== Infinity && p2Closer !== Infinity && p1Closer > p2Closer) faults.push(`电压表(${c.id})正负接线柱接反`);
-                }
-            });
-            return faults;
-        }
-
         function checkRangeError(battery, totalRes) {
             if(!battery || totalRes <= 0 || totalRes >= 999999) return [];
             const voltage = 1.5, current = voltage / totalRes;
@@ -1232,7 +1193,6 @@
                 if(dijkstra(closedGraph, batP1, batP2).dist[batP2] >= 999999) allFaults.push('断路: 即使闭合所有开关，电路仍不连通，请检查导线。');
             }
 
-            allFaults = allFaults.concat(checkMeterPolarity(battery));
             if(totalRes > 0 && totalRes < 999999) allFaults = allFaults.concat(checkRangeError(battery, totalRes));
 
             components.forEach(c => {
@@ -1284,16 +1244,6 @@
             conductingWireIds = new Set();
 
             if(isFaultMode && faultSelect !== 'none') {
-                if(faultSelect === 'meter_reversed') {
-                    let { graph: normalGraph } = buildGraph({}), normalRes = dijkstra(normalGraph, batP1, batP2).dist[batP2];
-                    if(normalRes > 0 && normalRes < 999999) {
-                        lightBulbsAll(normalGraph, batP1, batP2); conductingWireIds = findConductingWiresAll(normalGraph, batP1, batP2); renderWires();
-                    }
-                    let meters = components.filter(c => c.type === 'ammeter' || c.type === 'voltmeter');
-                    if(meters.length === 0) return setStatus('error', '⚠️ 电路中没有电表，无法模拟接反故障。');
-                    let target = meters[Math.floor(Math.random() * meters.length)];
-                    return setStatus('error', `⚠️ 故障: ${target.type === 'ammeter' ? '电流表' : '电压表'}(${target.id})正负接线柱接反！指针反向偏转，可能损坏电表。`);
-                }
                 if(faultSelect === 'range_error') {
                     let { graph: normalGraph } = buildGraph({}), normalRes = dijkstra(normalGraph, batP1, batP2).dist[batP2];
                     if(normalRes > 0 && normalRes < 999999) {
