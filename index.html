@@ -124,9 +124,32 @@
         /* 练习任务浮窗 */
         #practice-panel {
             pointer-events: auto;
+            transition: all 0.3s ease;
         }
         #practice-panel button, #practice-panel select {
             pointer-events: auto;
+        }
+        #practice-panel.collapsed .practice-content {
+            display: none;
+        }
+        #practice-panel .toggle-btn {
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        #practice-panel.collapsed .toggle-btn {
+            transform: rotate(180deg);
+        }
+        #practice-panel .toggle-btn svg {
+            pointer-events: none;
+        }
+        @media (max-width: 768px) {
+            #practice-panel {
+                width: 280px !important;
+            }
         }
 
         /* SVG 样式 */
@@ -263,45 +286,60 @@
         <!-- 课后练习任务浮窗 (支持增删改查选择) -->
         <div id="practice-panel" class="position-absolute top-0 end-0 m-3 p-3 bg-white border rounded shadow-sm d-none" style="z-index: 105; width: 320px;" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
             
-            <!-- 普通查看模式 -->
-            <div id="practice-view-mode">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                        练习任务
-                    </h6>
-                    <button class="btn btn-sm btn-outline-primary py-0" style="font-size: 12px;" onclick="startCreatePractice()">创建练习</button>
+            <!-- 标题栏（始终显示） -->
+            <div class="d-flex justify-content-between align-items-center mb-0">
+                <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    练习任务
+                </h6>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-primary py-0 d-none d-md-inline-block" style="font-size: 12px;" onclick="startCreatePractice()">创建练习</button>
+                    <span class="toggle-btn" onclick="togglePracticePanel()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </span>
                 </div>
-                
-                <select class="form-select form-select-sm mb-2" id="practice-select" onchange="loadSelectedPractice()">
-                    <!-- JS 动态填充 -->
-                </select>
-                
-                <div class="p-2 bg-light border rounded mb-3" style="max-height: 80px; overflow-y: auto;">
-                    <p class="small text-muted m-0" id="practice-task-desc">任务目标加载中...</p>
-                </div>
-                
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-success flex-fill fw-bold shadow-sm" id="btn-submit-practice" onclick="verifyPractice()">提交验证</button>
-                    <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-practice" onclick="deleteCurrentPractice()">删除本题</button>
-                </div>
-                <div id="practice-result" class="mt-2 small font-weight-bold text-center"></div>
             </div>
+            
+            <!-- 可折叠内容区 -->
+            <div class="practice-content">
+                <!-- 普通查看模式 -->
+                <div id="practice-view-mode">
+                    <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
+                        <button class="btn btn-sm btn-outline-primary py-0 d-md-none" style="font-size: 12px;" onclick="startCreatePractice()">创建练习</button>
+                    </div>
+                    
+                    <select class="form-select form-select-sm mb-2" id="practice-select" onchange="loadSelectedPractice()">
+                        <!-- JS 动态填充 -->
+                    </select>
+                    
+                    <div class="p-2 bg-light border rounded mb-3" style="max-height: 80px; overflow-y: auto;">
+                        <p class="small text-muted m-0" id="practice-task-desc">任务目标加载中...</p>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-success flex-fill fw-bold shadow-sm" id="btn-submit-practice" onclick="verifyPractice()">提交验证</button>
+                        <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-practice" onclick="deleteCurrentPractice()">删除本题</button>
+                    </div>
+                    <div id="practice-result" class="mt-2 small font-weight-bold text-center"></div>
+                </div>
 
-            <!-- 创建新练习编辑模式 -->
-            <div id="practice-edit-mode" class="d-none">
-                <div class="d-flex align-items-center mb-2">
-                    <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        创设新练习
-                    </h6>
-                </div>
-                <div class="p-2 bg-light border rounded mb-3">
-                    <p class="small text-muted m-0">画布已清空。请在左侧拖拽摆放您想发给学生的**初始元件**。摆放完成后点击下方“确定”进行保存。</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-secondary flex-fill shadow-sm" onclick="cancelCreatePractice()">取消并返回</button>
-                    <button class="btn btn-sm btn-primary flex-fill fw-bold shadow-sm" onclick="showSaveTaskModal()">确定并保存</button>
+                <!-- 创建新练习编辑模式 -->
+                <div id="practice-edit-mode" class="d-none">
+                    <div class="d-flex align-items-center mb-2 mt-2">
+                        <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            创设新练习
+                        </h6>
+                    </div>
+                    <div class="p-2 bg-light border rounded mb-3">
+                        <p class="small text-muted m-0">画布已清空。请在左侧拖拽摆放您想发给学生的**初始元件**。摆放完成后点击下方"确定"进行保存。</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-secondary flex-fill shadow-sm" onclick="cancelCreatePractice()">取消并返回</button>
+                        <button class="btn btn-sm btn-primary flex-fill fw-bold shadow-sm" onclick="showSaveTaskModal()">确定并保存</button>
+                    </div>
                 </div>
             </div>
 
@@ -640,6 +678,15 @@
             loadSelectedPractice();
         };
 
+        window.togglePracticePanel = function() {
+            const panel = document.getElementById('practice-panel');
+            panel.classList.toggle('collapsed');
+        };
+
+        function isMobileDevice() {
+            return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
         // 通用的提交验证逻辑
         window.verifyPractice = function() {
             const resultDiv = document.getElementById('practice-result');
@@ -689,6 +736,11 @@
 
                 if(val === 'practice') {
                     practicePanel.classList.remove('d-none');
+                    if(isMobileDevice()) {
+                        practicePanel.classList.add('collapsed');
+                    } else {
+                        practicePanel.classList.remove('collapsed');
+                    }
                     initPractices(); 
                     loadSelectedPractice(); 
                 } else {
