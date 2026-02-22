@@ -121,6 +121,14 @@
             box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
         }
 
+        /* 练习任务浮窗 */
+        #practice-panel {
+            pointer-events: auto;
+        }
+        #practice-panel button, #practice-panel select {
+            pointer-events: auto;
+        }
+
         /* SVG 样式 */
         .wire { stroke: var(--wire-color); stroke-width: 3; fill: none; stroke-linejoin: round; cursor: pointer; transition: stroke 0.3s; }
         .wire:hover { stroke: #dc3545; }
@@ -251,6 +259,54 @@
 
     <!-- 实验画布 -->
     <div class="canvas-container" id="canvas-container">
+        
+        <!-- 课后练习任务浮窗 (支持增删改查选择) -->
+        <div id="practice-panel" class="position-absolute top-0 end-0 m-3 p-3 bg-white border rounded shadow-sm d-none" style="z-index: 105; width: 320px;" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+            
+            <!-- 普通查看模式 -->
+            <div id="practice-view-mode">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                        练习任务
+                    </h6>
+                    <button class="btn btn-sm btn-outline-primary py-0" style="font-size: 12px;" onclick="startCreatePractice()">+ 新练习</button>
+                </div>
+                
+                <select class="form-select form-select-sm mb-2" id="practice-select" onchange="loadSelectedPractice()">
+                    <!-- JS 动态填充 -->
+                </select>
+                
+                <div class="p-2 bg-light border rounded mb-3" style="max-height: 80px; overflow-y: auto;">
+                    <p class="small text-muted m-0" id="practice-task-desc">任务目标加载中...</p>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success flex-fill fw-bold shadow-sm" id="btn-submit-practice" onclick="verifyPractice()">提交验证</button>
+                    <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-practice" onclick="deleteCurrentPractice()">删除本题</button>
+                </div>
+                <div id="practice-result" class="mt-2 small font-weight-bold text-center"></div>
+            </div>
+
+            <!-- 创建新练习编辑模式 -->
+            <div id="practice-edit-mode" class="d-none">
+                <div class="d-flex align-items-center mb-2">
+                    <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        创设新练习
+                    </h6>
+                </div>
+                <div class="p-2 bg-light border rounded mb-3">
+                    <p class="small text-muted m-0">画布已清空。请在左侧拖拽摆放您想发给学生的**初始元件**。摆放完成后点击下方“确定”进行保存。</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-secondary flex-fill shadow-sm" onclick="cancelCreatePractice()">取消并返回</button>
+                    <button class="btn btn-sm btn-primary flex-fill fw-bold shadow-sm" onclick="showSaveTaskModal()">确定并保存</button>
+                </div>
+            </div>
+
+        </div>
+
         <div class="canvas-wrapper" id="canvas-wrapper">
             <svg id="circuit-canvas">
                 <!-- 导线层 -->
@@ -301,6 +357,35 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">我知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存练习 Modal -->
+    <div class="modal fade" id="saveTaskModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">保存为自定义练习</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">练习名称</label>
+                        <input type="text" class="form-control" id="task-name-input" placeholder="例如：我的并联电路测试">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">任务要求 / 描述</label>
+                        <textarea class="form-control" id="task-desc-input" rows="3" placeholder="描述学生需要完成的目标，例如：请连接导线点亮所有灯泡..."></textarea>
+                    </div>
+                    <div class="text-muted small">
+                        * 当前画布上的所有元件和连线将会被保存。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveCurrentPractice()">确认保存</button>
                 </div>
             </div>
         </div>
@@ -362,12 +447,12 @@
             },
             ammeter: {
                 width: 60, height: 60, res: 0, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/>`,
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>`,
                 pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             },
             voltmeter: {
                 width: 60, height: 60, res: 999999, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 60 30" stroke="#333" stroke-width="2"/>`,
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>`,
                 pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             }
         };
@@ -379,7 +464,258 @@
             canvasContainer.style.backgroundPosition = `${canvasOffset.x}px ${canvasOffset.y}px`;
         }
 
+        // ================= 练习任务管理 (增删改查) =================
+        const STORE_KEY = 'circuit_custom_tasks';
+        let allPractices = [];
+        let lastSelectedPracticeId = null; // 用于记录创建模式前的练习题
+
+        function initPractices() {
+            const defaults = [
+                {
+                    id: 'default_1',
+                    name: '基础串联电路',
+                    description: '请使用已提供的电源、开关和灯泡，搭建一个基本的闭合串联电路。完成后启动实验并点亮灯泡！',
+                    components: [
+                        { id: 'comp_1', type: 'battery', x: 100, y: 100, isClosed: false },
+                        { id: 'comp_2', type: 'switch', x: 280, y: 140, isClosed: false },
+                        { id: 'comp_3', type: 'bulb', x: 160, y: 220, isClosed: false }
+                    ],
+                    wires: [],
+                    isCustom: false
+                },
+                {
+                    id: 'default_2',
+                    name: '并联电路挑战',
+                    description: '请使用提供的电源、两个灯泡、两个开关。使两个开关分别独立控制两个灯泡（并联关系）。',
+                    components: [
+                        { id: 'comp_1', type: 'battery', x: 80, y: 100, isClosed: false },
+                        { id: 'comp_2', type: 'bulb', x: 280, y: 80, isClosed: false },
+                        { id: 'comp_3', type: 'bulb', x: 280, y: 200, isClosed: false },
+                        { id: 'comp_4', type: 'switch', x: 180, y: 80, isClosed: false },
+                        { id: 'comp_5', type: 'switch', x: 180, y: 200, isClosed: false }
+                    ],
+                    wires: [],
+                    isCustom: false
+                }
+            ];
+
+            let customs = [];
+            try {
+                const saved = localStorage.getItem(STORE_KEY);
+                if(saved) customs = JSON.parse(saved);
+            } catch(e) {}
+
+            allPractices = [...defaults, ...customs];
+            
+            const select = document.getElementById('practice-select');
+            select.innerHTML = '';
+            allPractices.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.innerText = (p.isCustom ? '[自定义] ' : '') + p.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function loadSelectedPractice() {
+            const id = document.getElementById('practice-select').value;
+            const task = allPractices.find(p => p.id === id);
+            if(!task) return;
+
+            document.getElementById('practice-task-desc').innerText = task.description;
+            document.getElementById('practice-result').innerText = '';
+            
+            const delBtn = document.getElementById('btn-delete-practice');
+            if(task.isCustom) delBtn.classList.remove('d-none');
+            else delBtn.classList.add('d-none');
+
+            // 恢复画布状态
+            resetSimulation();
+            components = task.components.map(c => ({
+                id: c.id,
+                type: c.type,
+                x: c.x,
+                y: c.y,
+                def: CompDefs[c.type],
+                isClosed: c.isClosed || false
+            }));
+            wires = task.wires.map(w => ({...w}));
+            
+            // 重新计算 ID 计数器防止冲突
+            let maxId = 0;
+            components.forEach(c => {
+                const num = parseInt(c.id.split('_')[1]);
+                if(!isNaN(num) && num > maxId) maxId = num;
+            });
+            compCounter = maxId;
+
+            // 视角归中
+            canvasOffset = {x: 0, y: 0};
+            canvasScale = 1;
+            updateCanvasTransform();
+            
+            renderComponents();
+            renderWires();
+            setStatus('idle', '目标任务模式：请根据提示连接电路。');
+        }
+
+        // ================= 创建新练习流程 =================
+        window.startCreatePractice = function() {
+            // 记录当前的练习，以便取消时恢复
+            lastSelectedPracticeId = document.getElementById('practice-select').value;
+            
+            // 切换面板 UI 为创建模式
+            document.getElementById('practice-view-mode').classList.add('d-none');
+            document.getElementById('practice-edit-mode').classList.remove('d-none');
+            
+            // 清空画布并准备让用户摆放
+            resetCanvas(true);
+            setStatus('idle', '创设新练习：请在画布上摆放所需元件和连线...');
+        };
+
+        window.cancelCreatePractice = function() {
+            // 恢复 UI 面板
+            document.getElementById('practice-edit-mode').classList.add('d-none');
+            document.getElementById('practice-view-mode').classList.remove('d-none');
+            
+            // 恢复之前选中的练习
+            if (lastSelectedPracticeId) {
+                document.getElementById('practice-select').value = lastSelectedPracticeId;
+                loadSelectedPractice();
+            }
+        };
+
+        window.showSaveTaskModal = function() {
+            new bootstrap.Modal(document.getElementById('saveTaskModal')).show();
+        };
+
+        window.saveCurrentPractice = function() {
+            const name = document.getElementById('task-name-input').value.trim();
+            const desc = document.getElementById('task-desc-input').value.trim();
+            if(!name) return alert('请输入练习名称');
+
+            const savedComps = components.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, isClosed: c.isClosed }));
+            const savedWires = wires.map(w => ({ id: w.id, p1: w.p1, p2: w.p2 }));
+
+            const newTask = {
+                id: 'custom_' + Date.now(),
+                name: name,
+                description: desc || '无详细要求',
+                components: savedComps,
+                wires: savedWires,
+                isCustom: true
+            };
+
+            let customs = [];
+            try {
+                const saved = localStorage.getItem(STORE_KEY);
+                if(saved) customs = JSON.parse(saved);
+            } catch(e) {}
+
+            customs.push(newTask);
+            localStorage.setItem(STORE_KEY, JSON.stringify(customs));
+
+            bootstrap.Modal.getInstance(document.getElementById('saveTaskModal')).hide();
+            
+            document.getElementById('task-name-input').value = '';
+            document.getElementById('task-desc-input').value = '';
+
+            // 保存成功后退出创建模式 UI
+            document.getElementById('practice-edit-mode').classList.add('d-none');
+            document.getElementById('practice-view-mode').classList.remove('d-none');
+
+            // 重新初始化列表并选中新的练习
+            initPractices();
+            document.getElementById('practice-select').value = newTask.id;
+            loadSelectedPractice();
+            alert('成功保存为自定义练习！');
+        };
+
+        window.deleteCurrentPractice = function() {
+            const id = document.getElementById('practice-select').value;
+            const task = allPractices.find(p => p.id === id);
+            if(!task || !task.isCustom) return;
+
+            if(!confirm(`确定要删除自定义练习 "${task.name}" 吗？`)) return;
+
+            let customs = [];
+            try {
+                const saved = localStorage.getItem(STORE_KEY);
+                if(saved) customs = JSON.parse(saved);
+            } catch(e) {}
+
+            customs = customs.filter(c => c.id !== id);
+            localStorage.setItem(STORE_KEY, JSON.stringify(customs));
+
+            initPractices();
+            loadSelectedPractice();
+        };
+
+        // 通用的提交验证逻辑
+        window.verifyPractice = function() {
+            const resultDiv = document.getElementById('practice-result');
+            
+            if(!isSimulating) {
+                resultDiv.innerHTML = '<span class="text-warning">请先点击底部“启动实验”让电路运行！</span>';
+                return;
+            }
+
+            // 检查整体状态是否异常（短路或断路）
+            if (statusDisplay.classList.contains('status-error') || statusDisplay.classList.contains('status-idle')) {
+                resultDiv.innerHTML = '<span class="text-danger">任务失败：电路存在故障、短路或未能连通。</span>';
+                return;
+            }
+            
+            // 检查画布中是否有灯泡，若有则必须全部发光
+            const bulbs = components.filter(c => c.type === 'bulb');
+            if(bulbs.length > 0) {
+                let allLit = true;
+                bulbs.forEach(b => {
+                    const compGroup = document.querySelector(`g[data-id="${b.id}"]`);
+                    if(compGroup) {
+                        const glass = compGroup.querySelector('.bulb-glass');
+                        if(!glass || !glass.classList.contains('active')) {
+                            allLit = false;
+                        }
+                    }
+                });
+
+                if(allLit) {
+                    resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！电路连通正确，灯泡已全部点亮！</span>';
+                } else {
+                    resultDiv.innerHTML = '<span class="text-danger">任务失败：部分灯泡未能发光，请检查支路连线。</span>';
+                }
+            } else {
+                // 如果练习不包含灯泡（比如测电压），只要没报错就算通过
+                resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！任务验证通过！电路无异常。</span>';
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
+            
+            // 初始化练习数据
+            initPractices();
+
+            // --- 场景模式切换逻辑 (课中演示 / 课后练习) ---
+            document.getElementById('scene-select').addEventListener('change', (e) => {
+                const val = e.target.value;
+                const practicePanel = document.getElementById('practice-panel');
+                
+                // 每次切换时重置创建UI状态，防止从创建状态直接切走导致的UI混乱
+                document.getElementById('practice-edit-mode').classList.add('d-none');
+                document.getElementById('practice-view-mode').classList.remove('d-none');
+
+                if(val === 'practice') {
+                    practicePanel.classList.remove('d-none');
+                    initPractices(); 
+                    loadSelectedPractice(); 
+                } else {
+                    practicePanel.classList.add('d-none');
+                    resetCanvas(true); // 切换回自由沙盒时清空
+                    setStatus('idle', '等待操作：可自由搭建电路。');
+                }
+            });
+
             document.getElementById('mode-select').addEventListener('change', (e) => {
                 const faultPanel = document.getElementById('fault-panel');
                 if(e.target.value === 'fault') {
@@ -626,7 +962,6 @@
             return { x: Math.round((c.x + p.x) / gridSize) * gridSize, y: Math.round((c.y + p.y) / gridSize) * gridSize };
         }
 
-        // --- 核心：连线自动正交寻路与重绘 ---
         function getPinDir(pinId) {
             const cId = pinId.substring(0, pinId.lastIndexOf('_'));
             const pId = pinId.substring(pinId.lastIndexOf('_') + 1);
@@ -944,10 +1279,13 @@
             }
         }
 
-        function resetCanvas() {
-            if(confirm("确定清空画布并重置吗？")) {
+        function resetCanvas(silent = false) {
+            if(silent || confirm("确定清空画布并重置吗？")) {
                 components = []; wires = []; compCounter = 0;
                 resetSimulation(); renderComponents(); renderWires();
+                if(document.getElementById('practice-result')) {
+                    document.getElementById('practice-result').innerText = '';
+                }
             }
         }
 
@@ -956,7 +1294,7 @@
             conductingWireIds = new Set();
             document.getElementById('btn-simulate').innerText = "启动实验";
             document.getElementById('btn-simulate').classList.replace('btn-warning', 'btn-primary');
-            setStatus('idle', '等待操作 (未连接电源)');
+            setStatus('idle', document.getElementById('scene-select').value === 'practice' ? '目标任务模式：请根据提示连接电路。' : '等待操作 (未连接电源)');
             document.querySelectorAll('.bulb-glass, .bulb-cross').forEach(el => el.classList.remove('active'));
             renderWires();
         }
@@ -1164,8 +1502,6 @@
                     
                     let { graph: testGraph } = buildGraph({ forceSwitchesClosed: true });
                     
-                    // 核心逻辑修复：不要直接销毁接线柱节点，只剪断电压表“内部”那根阻值为 999999 的虚拟线圈导线。
-                    // 这样，如果有导线在电压表的接线柱上“接力”或“借道”，依然可以通过接线柱相互导通。
                     if (testGraph[`${c.id}_p1`]) {
                         testGraph[`${c.id}_p1`] = testGraph[`${c.id}_p1`].filter(e => e.comp !== c);
                     }
@@ -1176,7 +1512,6 @@
                     let distWithout = dijkstra(testGraph, batP1, batP2).dist[batP2];
                     distWithout = distWithout !== undefined ? distWithout : Infinity;
                     
-                    // 只有在原电路有通路，并且移除电压表内部线圈后导致整个电路断路时，才判定其为串联
                     if(distWith < Infinity && distWithout >= 999999) {
                         allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
                     }
@@ -1264,6 +1599,12 @@
             } else {
                 lightBulbsAll(graph, batP1, batP2); conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires();
                 setStatus('success', '状态: 导通。实验正常进行。');
+            }
+
+            // 自动触发练习模式的任务检测反馈
+            if(document.getElementById('scene-select').value === 'practice') {
+                const resDiv = document.getElementById('practice-result');
+                if (resDiv.innerHTML.includes('失败')) resDiv.innerHTML = '';
             }
         }
 
