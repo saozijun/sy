@@ -175,7 +175,6 @@
 
         /* SVG 样式 */
         .wire { stroke: var(--wire-color); stroke-width: 3; fill: none; stroke-linejoin: round; transition: stroke 0.3s; }
-        /* 【关键修复】将感应区 stroke-width 从 25 增加到 40，大幅提升点击率 */
         .wire-click-area { stroke: transparent; stroke-width: 40; fill: none; cursor: pointer; }
         
         .component-group { cursor: grab; }
@@ -313,7 +312,7 @@
                 <span>电压表</span>
             </div>
         </div>
-        <div id="palette-toggle" class="d-flex align-items-center justify-content-center gap-1">
+        <div id="palette-toggle" class="d-flex align-items-center justify-content-center gap-1 collapsed">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s ease;">
                 <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
@@ -520,6 +519,7 @@
         let isDraggingCanvas = false;
         let canvasDragStart = { x: 0, y: 0 };
         let canvasDragStartOffset = { x: 0, y: 0 };
+        let canvasDragExceeded = false; // 新增防抖越界标识
         
         const gridSize = 20;
 
@@ -866,8 +866,10 @@
 
             document.getElementById('btn-trigger-fault').addEventListener('click', triggerFaultDiagnosis);
 
+            let spaceKey = false;
+
+            // 画布交互核心逻辑（已修复鼠标及触摸屏防抖跳跃、缩放偏移问题，并解锁运行期视角控制）
             canvasContainer.addEventListener('wheel', (e) => {
-                if(isSimulating) return;
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
                 const rect = canvasContainer.getBoundingClientRect();
@@ -882,11 +884,11 @@
             }, {passive: false});
 
             canvasContainer.addEventListener('mousedown', (e) => {
-                if(isSimulating) return;
                 if(e.target === canvasContainer || e.target === canvas || e.target === canvasWrapper) {
                     if(e.button === 1 || (e.button === 0 && spaceKey)) {
                         e.preventDefault();
                         isDraggingCanvas = true;
+                        canvasDragExceeded = false;
                         canvasDragStart = { x: e.clientX, y: e.clientY };
                         canvasDragStartOffset = { ...canvasOffset };
                     }
@@ -895,8 +897,15 @@
 
             document.addEventListener('mousemove', (e) => {
                 if(isDraggingCanvas) {
-                    const dist = Math.hypot(e.clientX - canvasDragStart.x, e.clientY - canvasDragStart.y);
-                    if (dist > 10) { // 【修复】防抖阈值 10px，防止点击时的微小挪动干扰
+                    if (!canvasDragExceeded) {
+                        const dist = Math.hypot(e.clientX - canvasDragStart.x, e.clientY - canvasDragStart.y);
+                        if (dist > 10) { 
+                            canvasDragExceeded = true;
+                            canvasDragStart = { x: e.clientX, y: e.clientY };
+                            canvasDragStartOffset = { ...canvasOffset };
+                        }
+                    }
+                    if (canvasDragExceeded) {
                         e.preventDefault();
                         canvasOffset.x = canvasDragStartOffset.x + (e.clientX - canvasDragStart.x);
                         canvasOffset.y = canvasDragStartOffset.y + (e.clientY - canvasDragStart.y);
@@ -909,7 +918,6 @@
                 if(e.button === 1 || e.button === 0) isDraggingCanvas = false;
             });
 
-            let spaceKey = false;
             document.addEventListener('keydown', (e) => {
                 if(e.code === 'Space') {
                     spaceKey = true;
@@ -927,9 +935,9 @@
             let touchStartDistance = 0, touchStartScale = 1, touchStartOffset = { x: 0, y: 0 }, lastTouchCenter = { x: 0, y: 0 };
 
             canvasContainer.addEventListener('touchstart', (e) => {
-                if(isSimulating) return;
-                if(e.touches.length === 2) {
+                if(e.touches.length >= 2) {
                     e.preventDefault();
+                    isDraggingCanvas = false; // 取消单指拖拽状态
                     const touch1 = e.touches[0], touch2 = e.touches[1];
                     touchStartDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
                     touchStartScale = canvasScale;
@@ -937,6 +945,7 @@
                     lastTouchCenter = { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2 };
                 } else if(e.touches.length === 1 && !draggingComp && !tempWire && !isHoldingWire) {
                     isDraggingCanvas = true;
+                    canvasDragExceeded = false;
                     const touch = e.touches[0];
                     canvasDragStart = { x: touch.clientX, y: touch.clientY };
                     canvasDragStartOffset = { ...canvasOffset };
@@ -944,23 +953,33 @@
             }, {passive: false});
 
             canvasContainer.addEventListener('touchmove', (e) => {
-                if(e.touches.length === 2) {
+                if(e.touches.length >= 2) {
                     e.preventDefault();
                     const touch1 = e.touches[0], touch2 = e.touches[1];
                     const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-                    const scale = touchStartScale * (distance / touchStartDistance);
-                    canvasScale = Math.max(0.3, Math.min(3, scale));
-                    const center = { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2 };
-                    const rect = canvasContainer.getBoundingClientRect();
-                    const worldX = (lastTouchCenter.x - rect.left - touchStartOffset.x) / touchStartScale;
-                    const worldY = (lastTouchCenter.y - rect.top - touchStartOffset.y) / touchStartScale;
-                    canvasOffset.x = center.x - rect.left - worldX * canvasScale;
-                    canvasOffset.y = center.y - rect.top - worldY * canvasScale;
-                    updateCanvasTransform();
+                    if (touchStartDistance > 0) {
+                        const scale = touchStartScale * (distance / touchStartDistance);
+                        canvasScale = Math.max(0.3, Math.min(3, scale));
+                        const center = { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2 };
+                        const rect = canvasContainer.getBoundingClientRect();
+                        const worldX = (lastTouchCenter.x - rect.left - touchStartOffset.x) / touchStartScale;
+                        const worldY = (lastTouchCenter.y - rect.top - touchStartOffset.y) / touchStartScale;
+                        canvasOffset.x = center.x - rect.left - worldX * canvasScale;
+                        canvasOffset.y = center.y - rect.top - worldY * canvasScale;
+                        updateCanvasTransform();
+                    }
                 } else if(isDraggingCanvas && e.touches.length === 1) {
                     const touch = e.touches[0];
-                    const dist = Math.hypot(touch.clientX - canvasDragStart.x, touch.clientY - canvasDragStart.y);
-                    if (dist > 10) { // 【修复】防抖阈值 10px，手指微抖不再立刻打断长按识别
+                    if (!canvasDragExceeded) {
+                        const dist = Math.hypot(touch.clientX - canvasDragStart.x, touch.clientY - canvasDragStart.y);
+                        if (dist > 10) { 
+                            canvasDragExceeded = true;
+                            // 重置参考点位，保证平移无跳变偏移
+                            canvasDragStart = { x: touch.clientX, y: touch.clientY };
+                            canvasDragStartOffset = { ...canvasOffset };
+                        }
+                    }
+                    if (canvasDragExceeded) {
                         e.preventDefault();
                         canvasOffset.x = canvasDragStartOffset.x + (touch.clientX - canvasDragStart.x);
                         canvasOffset.y = canvasDragStartOffset.y + (touch.clientY - canvasDragStart.y);
@@ -969,15 +988,24 @@
                 }
             }, {passive: false});
 
-            canvasContainer.addEventListener('touchend', () => isDraggingCanvas = false);
+            canvasContainer.addEventListener('touchend', (e) => {
+                if (e.touches.length === 0) {
+                    isDraggingCanvas = false;
+                } else if (e.touches.length === 1 && !draggingComp && !tempWire && !isHoldingWire) {
+                    // 当从双指缩放变为单指保留时，直接顺滑接管为拖动画布，不再出现位置闪跳
+                    isDraggingCanvas = true;
+                    canvasDragExceeded = true; 
+                    const touch = e.touches[0];
+                    canvasDragStart = { x: touch.clientX, y: touch.clientY };
+                    canvasDragStartOffset = { ...canvasOffset };
+                }
+            });
 
             canvas.addEventListener('touchstart', handleDragStart, {passive: false});
             document.addEventListener('touchmove', handleDragMove, {passive: false});
             document.addEventListener('touchend', handleDragEnd);
             canvas.addEventListener('mousedown', handleDragStart);
-            document.addEventListener('mousemove', handleDragMove);
-            document.addEventListener('mouseup', handleDragEnd);
-
+            
             initPaletteDrag();
             updateCanvasTransform();
         });
@@ -1338,7 +1366,6 @@
                 const pathData = getPathData(wire.p1, c1, wire.p2, c2);
 
                 const wireGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                // 【修复】注入可脱胶视觉位移用的特殊类名
                 wireGroup.setAttribute('class', `wire-group-${wire.id}`);
                 
                 const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1359,12 +1386,12 @@
                     wireHoldTimer = setTimeout(() => {
                         holdingThisWire = true;
                         isHoldingWire = true;
-                        isDraggingCanvas = false; // 【关键修复】立刻切断画布底图的平移权
+                        isDraggingCanvas = false; 
                         draggingWireId = wire.id;
                         trashCan.classList.add('visible');
                         path.style.stroke = '#dc3545';
                         path.style.strokeDasharray = '5,5';
-                        path.style.strokeWidth = '4'; // 变粗产生物理抓起感
+                        path.style.strokeWidth = '4'; 
                         if (navigator.vibrate) navigator.vibrate(50);
                     }, 300);
                 };
@@ -1379,7 +1406,7 @@
                     if(!holdingThisWire && wireHoldTimer && wireTouchStartPt) {
                         const pt = getEventPoint(e);
                         const dist = Math.hypot(pt.x - wireTouchStartPt.x, pt.y - wireTouchStartPt.y);
-                        if(dist > 10) { // 【修复】防抖容差，允许指尖极轻微抖动而不取消长按
+                        if(dist > 10) { 
                             clearTimeout(wireHoldTimer);
                             wireHoldTimer = null;
                         }
@@ -1478,7 +1505,6 @@
                     trashCan.classList.remove('active'); isHoveringTrash = false;
                 }
                 
-                // 【关键修复】直观的视觉反馈：让导线跟着指尖移动，用户确信自己正在拖动
                 if (wireTouchStartPt) {
                     const world = screenToWorld(pt.x, pt.y);
                     const worldStart = screenToWorld(wireTouchStartPt.x, wireTouchStartPt.y);
