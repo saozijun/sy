@@ -405,12 +405,9 @@
             });
 
             // 阻止触摸默认行为
-            canvas.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
-            
-            // 全局拖拽事件
             canvas.addEventListener('touchstart', handleDragStart, {passive: false});
-            canvas.addEventListener('touchmove', handleDragMove, {passive: false});
-            canvas.addEventListener('touchend', handleDragEnd);
+            document.addEventListener('touchmove', handleDragMove, {passive: false});
+            document.addEventListener('touchend', handleDragEnd);
             canvas.addEventListener('mousedown', handleDragStart);
             document.addEventListener('mousemove', handleDragMove);
             document.addEventListener('mouseup', handleDragEnd);
@@ -666,9 +663,10 @@
         }
 
         function handleDragMove(e) {
+            if (!tempWire && !draggingComp) return;
+            e.preventDefault();
             // 1. 如果正在拖拽连线
             if (tempWire) {
-                e.preventDefault();
                 const pt = getEventPoint(e);
                 const rect = canvas.getBoundingClientRect();
                 let rawX = pt.x - rect.left;
@@ -708,7 +706,6 @@
 
             // 2. 如果正在拖拽元件
             if (draggingComp) {
-                e.preventDefault();
                 const pt = getEventPoint(e);
                 const rect = canvas.getBoundingClientRect();
                 
