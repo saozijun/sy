@@ -989,7 +989,7 @@
                 if(c.type === 'battery') return;
                 const p1 = `${c.id}_p1`, p2 = `${c.id}_p2`;
                 let res = c.def.res;
-                if(c.type === 'switch') res = c.isClosed ? 0 : 999999;
+                if(c.type === 'switch') res = (opts.forceSwitchesClosed || c.isClosed) ? 0 : 999999;
                 if(opts.applianceShort && (c.type === 'bulb' || c.type === 'resistor')) res = 0;
                 addEdge(p1, p2, res, c);
             });
@@ -1163,10 +1163,22 @@
                     }
                 }
                 if(c.type === 'voltmeter') {
-                    let { graph: testGraph } = buildGraph({});
+                    // 修复：强制将所有开关视为闭合状态，排除开关断路带来的干扰
+                    let { graph: fullGraph } = buildGraph({ forceSwitchesClosed: true });
+                    let distWith = dijkstra(fullGraph, batP1, batP2).dist[batP2];
+                    distWith = distWith !== undefined ? distWith : Infinity;
+                    
+                    let { graph: testGraph } = buildGraph({ forceSwitchesClosed: true });
                     delete testGraph[`${c.id}_p1`]; delete testGraph[`${c.id}_p2`];
                     for(let node in testGraph) testGraph[node] = testGraph[node].filter(e => e.to !== `${c.id}_p1` && e.to !== `${c.id}_p2`);
-                    if(dijkstra(testGraph, batP1, batP2).dist[batP2] >= 999999) allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
+                    
+                    let distWithout = dijkstra(testGraph, batP1, batP2).dist[batP2];
+                    distWithout = distWithout !== undefined ? distWithout : Infinity;
+                    
+                    // 只有在原电路有通路(哪怕只过电压表)，并且移除电压表后导致电路断路时，才判定其为串联
+                    if(distWith < Infinity && distWithout >= 999999) {
+                        allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
+                    }
                 }
             });
             return allFaults;
