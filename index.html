@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>初中物理：极简电路连接模拟器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --grid-size: 20px;
+            --primary-color: #0d6efd;
+            --wire-color: #333;
+            --canvas-bg: #f8f9fa;
+        }
+        body {
+            overscroll-behavior-y: none;
+            touch-action: pan-x pan-y;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #e9ecef;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        /* 顶部导航与控制区 */
+        .header-area {
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            z-index: 10;
+            padding: 10px;
+        }
+        /* 元件库水平滚动区 */
+        .component-palette {
+            display: flex;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 10px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            gap: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .palette-item {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 70px;
+            padding: 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+            touch-action: pan-x; /* 允许水平滑动，由JS接管垂直拖动 */
+        }
+        .palette-item:active { background-color: #e9ecef; }
+        .palette-item svg { width: 40px; height: 40px; margin-bottom: 5px; pointer-events: none; }
+        .palette-item span { font-size: 12px; color: #495057; pointer-events: none; }
+        
+        /* 核心画布区 */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background-color: var(--canvas-bg);
+            background-image:
+                linear-gradient(to right, #ddd 1px, transparent 1px),
+                linear-gradient(to bottom, #ddd 1px, transparent 1px);
+            background-size: var(--grid-size) var(--grid-size);
+            overflow: hidden;
+            touch-action: none; /* 画布内完全接管触摸事件 */
+        }
+        #circuit-canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* 垃圾桶区 */
+        .trash-can {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background-color: rgba(220, 53, 69, 0.15);
+            color: #dc3545;
+            border: 2px dashed #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: all 0.2s ease;
+            opacity: 0;
+            pointer-events: none; /* 让拖拽事件穿透 */
+            transform: scale(0.8);
+        }
+        .trash-can.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .trash-can.active {
+            transform: scale(1.2);
+            background-color: #dc3545;
+            color: #fff;
+            border-style: solid;
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+        }
+
+        /* SVG 样式 */
+        .wire { stroke: var(--wire-color); stroke-width: 4; fill: none; cursor: pointer; transition: stroke 0.3s; }
+        .wire:hover { stroke: #dc3545; }
+        .wire-flow {
+            stroke: #ffeb3b;
+            stroke-width: 4;
+            fill: none;
+            pointer-events: none;
+            stroke-dasharray: 10, 10;
+            stroke-linecap: round;
+            animation: wire-flow-anim 1s linear infinite;
+            filter: drop-shadow(0 0 3px #ffc107);
+        }
+        @keyframes wire-flow-anim {
+            to { stroke-dashoffset: -20; }
+        }
+        .component-group { cursor: grab; }
+        .component-group:active { cursor: grabbing; }
+        .terminal { fill: #dc3545; stroke: #fff; stroke-width: 2; cursor: crosshair; transition: r 0.2s; }
+        .terminal.negative { fill: #0dcaf0; }
+        .terminal:hover, .terminal.active { r: 8; stroke: #ffc107; stroke-width: 3; }
+        
+        /* 灯泡发光效果 */
+        .bulb-glass {
+            transition: all 0.3s ease;
+            fill: #fff;
+        }
+        .bulb-glass.active {
+            fill: url(#bulb-glow);
+            filter: drop-shadow(0 0 5px #ffeb3b) drop-shadow(0 0 15px #ffc107);
+            stroke: #fbc02d;
+        }
+
+        /* 状态与控制栏 */
+        .footer-area {
+            background: #fff;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            z-index: 10;
+        }
+        .status-box {
+            font-size: 14px;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .status-idle { background: #e9ecef; color: #495057; }
+        .status-success { background: #d1e7dd; color: #0f5132; }
+        .status-error { background: #f8d7da; color: #842029; }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部控制区 -->
+    <div class="header-area d-flex justify-content-between align-items-center">
+        <h5 class="m-0 text-truncate" style="max-width: 20%;">电路实验</h5>
+        <div class="d-flex gap-1 flex-wrap">
+            <button class="btn btn-sm btn-outline-success" onclick="genSeriesCircuit()">串联</button>
+            <button class="btn btn-sm btn-outline-success" onclick="genParallelCircuit()">并联</button>
+            <button class="btn btn-sm btn-outline-success" onclick="genAmmeterCircuit()">测电流</button>
+            <button class="btn btn-sm btn-outline-success" onclick="genVoltmeterCircuit()">测电压</button>
+            <button class="btn btn-sm btn-outline-success" onclick="genFullCircuit()">完整电路</button>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="scene-select">
+                <option value="class">课中演示</option>
+                <option value="practice">课后练习</option>
+            </select>
+            <select class="form-select form-select-sm" id="mode-select">
+                <option value="basic">基础搭建</option>
+                <option value="fault">故障模拟</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 故障模拟专区 (默认隐藏) -->
+    <div id="fault-panel" class="bg-light px-2 py-2 border-bottom d-none">
+        <div class="d-flex align-items-center justify-content-between gap-2">
+            <span style="font-size: 13px; white-space: nowrap;">植入故障:</span>
+            <select class="form-select form-select-sm" id="fault-type">
+                <option value="none">无故障 (自动识别)</option>
+                <option value="power_short">电源短路</option>
+                <option value="appliance_short">用电器短路</option>
+                <option value="wire_break">导线断路</option>
+                <option value="meter_reversed">电表接反</option>
+                <option value="range_error">量程选错</option>
+            </select>
+            <button style="width: 80px;" class="btn btn-sm btn-outline-danger" id="btn-trigger-fault">触发</button>
+        </div>
+    </div>
+
+    <!-- 元件库 -->
+    <div class="component-palette" id="palette">
+        <div class="palette-item" data-type="battery">
+            <svg viewBox="0 0 60 40">
+                <rect x="5" y="10" width="50" height="20" fill="#fff" stroke="#333" stroke-width="2"/>
+                <rect x="5" y="10" width="15" height="20" fill="#333"/>
+                <text x="8" y="25" fill="#fff" font-size="14">+</text>
+                <text x="45" y="25" fill="#333" font-size="16">-</text>
+            </svg>
+            <span>1.5V 电池</span>
+        </div>
+        <div class="palette-item" data-type="bulb">
+            <svg viewBox="0 0 60 60">
+                <circle cx="30" cy="25" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
+                <path d="M 22 25 L 38 25 M 30 15 L 30 35" stroke="#333" stroke-width="2"/>
+                <rect x="25" y="40" width="10" height="10" fill="#777"/>
+            </svg>
+            <span>2.5V 灯泡</span>
+        </div>
+        <div class="palette-item" data-type="resistor">
+            <svg viewBox="0 0 60 40">
+                <rect x="10" y="12" width="40" height="16" fill="#fff" stroke="#333" stroke-width="2"/>
+                <text x="20" y="25" font-size="12">10Ω</text>
+            </svg>
+            <span>10Ω 电阻</span>
+        </div>
+        <div class="palette-item" data-type="switch">
+            <svg viewBox="0 0 60 40">
+                <circle cx="15" cy="20" r="3" fill="#333"/>
+                <circle cx="45" cy="20" r="3" fill="#333"/>
+                <line x1="15" y1="20" x2="40" y2="10" stroke="#333" stroke-width="3"/>
+            </svg>
+            <span>单刀开关</span>
+        </div>
+        <div class="palette-item" data-type="ammeter">
+            <svg viewBox="0 0 60 60">
+                <circle cx="30" cy="30" r="18" fill="#fff" stroke="#333" stroke-width="2"/>
+                <text x="24" y="36" font-size="18" font-weight="bold">A</text>
+            </svg>
+            <span>电流表</span>
+        </div>
+        <div class="palette-item" data-type="voltmeter">
+            <svg viewBox="0 0 60 60">
+                <circle cx="30" cy="30" r="18" fill="#fff" stroke="#333" stroke-width="2"/>
+                <text x="24" y="36" font-size="18" font-weight="bold">V</text>
+            </svg>
+            <span>电压表</span>
+        </div>
+    </div>
+
+    <!-- 实验画布 -->
+    <div class="canvas-container" id="canvas-container">
+        <svg id="circuit-canvas">
+            <defs>
+                <radialGradient id="bulb-glow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                    <stop offset="0%" style="stop-color:#fff;stop-opacity:1" />
+                    <stop offset="40%" style="stop-color:#ffeb3b;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#fbc02d;stop-opacity:1" />
+                </radialGradient>
+            </defs>
+            <!-- 导线层 -->
+            <g id="layer-wires"></g>
+            <!-- 元件层 -->
+            <g id="layer-components"></g>
+        </svg>
+        
+        <!-- 删除垃圾桶 -->
+        <div id="trash-can" class="trash-can">
+            <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+        </div>
+    </div>
+
+    <!-- 底部控制区 -->
+    <div class="footer-area">
+        <div id="status-display" class="status-box status-idle">
+            等待操作 (未连接电源)
+        </div>
+        <div class="d-flex justify-content-between gap-2">
+            <button class="btn btn-secondary flex-fill" onclick="showGuide()">操作指南</button>
+            <button class="btn btn-danger flex-fill" onclick="resetCanvas()">重置画布</button>
+            <button class="btn btn-primary flex-fill" id="btn-simulate" onclick="toggleSimulation()">启动实验</button>
+        </div>
+    </div>
+
+    <!-- 3步操作指南 Modal -->
+    <div class="modal fade" id="guideModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">简单三步操作指南</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <h6>第一步：添加与摆放</h6>
+                    <p class="text-muted small"><strong>长按或拖拽</strong>顶部元件库中的元件，移动至画布适当位置松手，自动对齐网格。<br>拖入右下角<strong>垃圾桶</strong>可将其删除。</p>
+                    <hr>
+                    <h6>第二步：拖拽连线</h6>
+                    <p class="text-muted small"><strong>按住</strong>元件两端的红色/蓝色引脚节点，<strong>拖动</strong>鼠标/手指。出现黑色连线后，将其靠近另一个元件的引脚，会自动吸附，松手即可完成连线。点击已连好的导线可将其删除。</p>
+                    <hr>
+                    <h6>第三步：启动与诊断</h6>
+                    <p class="text-muted small">确保电路闭合后，点击“启动实验”，观察灯泡发光情况或底部状态栏的故障诊断提示。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">我知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS (for Modal) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        /**
+         * 核心状态管理与交互逻辑
+         */
+        const canvas = document.getElementById('circuit-canvas');
+        const layerWires = document.getElementById('layer-wires');
+        const layerComps = document.getElementById('layer-components');
+        const statusDisplay = document.getElementById('status-display');
+        const trashCan = document.getElementById('trash-can');
+        
+        let components = [];
+        let wires = [];
+        let compCounter = 0;
+        let isSimulating = false;
+        let conductingWireIds = new Set();
+        
+        // 元件拖拽变量
+        let draggingComp = null;
+        let dragOffset = { x: 0, y: 0 };
+        let isHoveringTrash = false;
+
+        // 连线拖拽变量 (新增)
+        let tempWire = null; 
+        let allPinsCache = [];
+        
+        // 尺寸与网格
+        const gridSize = 20;
+
+        // 元件定义库 (图形与内部电气特性)
+        const CompDefs = {
+            battery: {
+                width: 60, height: 40, res: 0, type: 'source',
+                svg: `<rect x="0" y="10" width="60" height="20" fill="#fff" stroke="#333" stroke-width="2"/><rect x="0" y="10" width="15" height="20" fill="#333"/><text x="4" y="25" fill="#fff" font-size="14">+</text><text x="48" y="25" fill="#333" font-size="16">-</text>`,
+                pins: [{id: 'p1', x: 0, y: 20, type:'positive'}, {id: 'p2', x: 60, y: 20, type:'negative'}]
+            },
+            bulb: {
+                width: 60, height: 60, res: 10, type: 'load',
+                svg: `<circle class="bulb-glass" cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><path d="M 22 30 L 38 30 M 30 20 L 30 40" stroke="#333" stroke-width="2"/><rect x="25" y="45" width="10" height="10" fill="#777"/>`,
+                pins: [{id: 'p1', x: 25, y: 50}, {id: 'p2', x: 35, y: 50}]
+            },
+            resistor: {
+                width: 60, height: 40, res: 10, type: 'load',
+                svg: `<rect x="10" y="12" width="40" height="16" fill="#fff" stroke="#333" stroke-width="2"/><text x="18" y="25" font-size="12">10Ω</text>`,
+                pins: [{id: 'p1', x: 10, y: 20}, {id: 'p2', x: 50, y: 20}]
+            },
+            switch: {
+                width: 60, height: 40, res: 0, type: 'switch',
+                svg: `<circle cx="15" cy="20" r="3" fill="#333"/><circle cx="45" cy="20" r="3" fill="#333"/><line class="switch-blade" x1="15" y1="20" x2="40" y2="10" stroke="#333" stroke-width="3"/>`,
+                pins: [{id: 'p1', x: 15, y: 20}, {id: 'p2', x: 45, y: 20}]
+            },
+            ammeter: {
+                width: 60, height: 60, res: 0, type: 'meter',
+                svg: `<circle cx="30" cy="30" r="18" fill="#fff" stroke="#333" stroke-width="2"/><text x="24" y="36" font-size="18" font-weight="bold">A</text>`,
+                pins: [{id: 'p1', x: 12, y: 30, type:'positive'}, {id: 'p2', x: 48, y: 30, type:'negative'}]
+            },
+            voltmeter: {
+                width: 60, height: 60, res: 999999, type: 'meter',
+                svg: `<circle cx="30" cy="30" r="18" fill="#fff" stroke="#333" stroke-width="2"/><text x="24" y="36" font-size="18" font-weight="bold">V</text>`,
+                pins: [{id: 'p1', x: 12, y: 30, type:'positive'}, {id: 'p2', x: 48, y: 30, type:'negative'}]
+            }
+        };
+
+        // UI 初始化与事件绑定
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('mode-select').addEventListener('change', (e) => {
+                const faultPanel = document.getElementById('fault-panel');
+                if(e.target.value === 'fault') {
+                    faultPanel.classList.remove('d-none');
+                } else {
+                    faultPanel.classList.add('d-none');
+                    document.getElementById('fault-type').value = 'none';
+                }
+                resetSimulation();
+            });
+
+            document.getElementById('btn-trigger-fault').addEventListener('click', () => {
+                if(!isSimulating) toggleSimulation();
+                else updateSimulation();
+            });
+
+            // 阻止触摸默认行为
+            canvas.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
+            
+            // 全局拖拽事件
+            canvas.addEventListener('touchstart', handleDragStart, {passive: false});
+            canvas.addEventListener('touchmove', handleDragMove, {passive: false});
+            canvas.addEventListener('touchend', handleDragEnd);
+            canvas.addEventListener('mousedown', handleDragStart);
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+
+            initPaletteDrag();
+        });
+
+        function showGuide() {
+            new bootstrap.Modal(document.getElementById('guideModal')).show();
+        }
+
+        // 顶部元件库的拖出交互逻辑
+        function initPaletteDrag() {
+            const paletteItems = document.querySelectorAll('.palette-item');
+            
+            paletteItems.forEach(item => {
+                let holdTimer = null;
+                let isHolding = false;
+
+                const startPaletteDrag = (pt, type) => {
+                    if(isSimulating) return alert('请先停止实验再修改电路');
+                    
+                    const def = CompDefs[type];
+                    const rect = canvas.getBoundingClientRect();
+                    
+                    let rawX = pt.x - rect.left - def.width / 2;
+                    let rawY = pt.y - rect.top - def.height / 2;
+                    
+                    const comp = {
+                        id: 'comp_' + (++compCounter),
+                        type: type,
+                        x: Math.round(rawX / gridSize) * gridSize,
+                        y: Math.round(rawY / gridSize) * gridSize,
+                        def: def,
+                        isClosed: false
+                    };
+                    
+                    components.push(comp);
+                    draggingComp = comp;
+                    dragOffset = { x: def.width / 2, y: def.height / 2 };
+                    
+                    trashCan.classList.add('visible');
+                    renderComponents();
+                };
+
+                item.addEventListener('touchstart', (e) => {
+                    if(isSimulating) return;
+                    const pt = getEventPoint(e);
+                    isHolding = false;
+                    holdTimer = setTimeout(() => {
+                        isHolding = true;
+                        startPaletteDrag(pt, item.getAttribute('data-type'));
+                    }, 200); 
+                }, {passive: true});
+
+                item.addEventListener('touchmove', (e) => {
+                    if (!isHolding && holdTimer) {
+                        clearTimeout(holdTimer);
+                        holdTimer = null;
+                    }
+                    if (isHolding) {
+                        e.preventDefault();
+                        handleDragMove(e);
+                    }
+                }, {passive: false});
+
+                const cancelTouch = (e) => {
+                    if (holdTimer) clearTimeout(holdTimer);
+                    if (isHolding) {
+                        handleDragEnd(e);
+                        isHolding = false;
+                    }
+                };
+                item.addEventListener('touchend', cancelTouch);
+                item.addEventListener('touchcancel', cancelTouch);
+
+                item.addEventListener('mousedown', (e) => {
+                    if(isSimulating) return alert('请先停止实验再修改电路');
+                    e.preventDefault();
+                    startPaletteDrag(getEventPoint(e), item.getAttribute('data-type'));
+                });
+            });
+        }
+
+        // 渲染元件层
+        function renderComponents() {
+            layerComps.innerHTML = '';
+            components.forEach(comp => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', 'component-group');
+                g.setAttribute('transform', `translate(${comp.x}, ${comp.y})`);
+                g.setAttribute('data-id', comp.id);
+                
+                let svgContent = comp.def.svg;
+                if(comp.type === 'switch' && comp.isClosed) {
+                    svgContent = svgContent.replace('y2="10"', 'y2="20"');
+                }
+                g.innerHTML = svgContent;
+
+                if(comp.type === 'switch') {
+                    g.addEventListener('dblclick', (e) => toggleSwitch(comp.id, e));
+                    let touchStartTime = 0;
+                    g.addEventListener('touchstart', () => touchStartTime = Date.now());
+                    g.addEventListener('touchend', (e) => {
+                        if(Date.now() - touchStartTime < 200 && !draggingComp) toggleSwitch(comp.id, e);
+                    });
+                }
+
+                comp.def.pins.forEach(pin => {
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    const pinId = `${comp.id}_${pin.id}`;
+                    circle.setAttribute('class', `terminal ${pin.type === 'negative' ? 'negative' : ''}`);
+                    if (comp.type === 'ammeter' || comp.type === 'voltmeter' || comp.type === 'bulb') {
+                        circle.setAttribute('cx', Math.round((comp.x + pin.x) / gridSize) * gridSize - comp.x);
+                        circle.setAttribute('cy', Math.round((comp.y + pin.y) / gridSize) * gridSize - comp.y);
+                    } else {
+                        circle.setAttribute('cx', pin.x);
+                        circle.setAttribute('cy', pin.y);
+                    }
+                    circle.setAttribute('r', 5);
+                    circle.setAttribute('data-pinid', pinId);
+                    circle.setAttribute('data-compid', comp.id);
+                    g.appendChild(circle);
+                });
+                
+                layerComps.appendChild(g);
+            });
+        }
+
+        // 开关切换
+        function toggleSwitch(id, e) {
+            if(e) e.stopPropagation();
+            const comp = components.find(c => c.id === id);
+            if(comp) {
+                comp.isClosed = !comp.isClosed;
+                renderComponents();
+                if(isSimulating) updateSimulation();
+            }
+        }
+
+        // 获取引脚全局坐标
+        function getPinCoords(pinId) {
+            const lastIndex = pinId.lastIndexOf('_');
+            const actualCompId = pinId.substring(0, lastIndex);
+            const actualPinId = pinId.substring(lastIndex + 1);
+            
+            const c = components.find(x => x.id === actualCompId);
+            if(!c) return {x:0, y:0};
+            const p = c.def.pins.find(x => x.id === actualPinId);
+            return { x: Math.round((c.x + p.x) / gridSize) * gridSize, y: Math.round((c.y + p.y) / gridSize) * gridSize };
+        }
+
+        // 渲染导线层
+        function renderWires() {
+            layerWires.innerHTML = '';
+            
+            // 绘制真实导线
+            wires.forEach(wire => {
+                const c1 = getPinCoords(wire.p1);
+                const c2 = getPinCoords(wire.p2);
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${c1.x} ${c1.y} L ${c2.x} ${c2.y}`);
+                path.setAttribute('class', 'wire');
+                
+                const removeWire = (e) => {
+                    e.stopPropagation();
+                    if(isSimulating) return;
+                    wires = wires.filter(w => w.id !== wire.id);
+                    renderWires();
+                };
+                path.addEventListener('click', removeWire);
+                path.addEventListener('touchstart', removeWire);
+                
+                layerWires.appendChild(path);
+
+                if(isSimulating && conductingWireIds.has(wire.id)) {
+                    const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    flow.setAttribute('d', `M ${c1.x} ${c1.y} L ${c2.x} ${c2.y}`);
+                    flow.setAttribute('class', 'wire-flow');
+                    layerWires.appendChild(flow);
+                }
+            });
+
+            // 绘制拖拽过程中的虚线临时导线
+            if (tempWire) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${tempWire.startX} ${tempWire.startY} L ${tempWire.endX} ${tempWire.endY}`);
+                path.setAttribute('class', 'wire');
+                path.style.strokeDasharray = '5,5'; // 虚线效果
+                path.style.pointerEvents = 'none'; // 关键：让事件穿透，不阻挡后续的元素查找
+                path.style.opacity = '0.7';
+                layerWires.appendChild(path);
+            }
+        }
+
+        function getEventPoint(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        /* --- 全局拖拽事件处理 --- */
+        function handleDragStart(e) {
+            if(isSimulating) return;
+
+            // 1. 判断是否按在了引脚上 (开始连线)
+            if (e.target.classList && e.target.classList.contains('terminal')) {
+                e.stopPropagation(); // 阻止触发元件拖动
+                const pinId = e.target.getAttribute('data-pinid');
+                const startCoords = getPinCoords(pinId);
+                
+                tempWire = {
+                    p1: pinId,
+                    startX: startCoords.x,
+                    startY: startCoords.y,
+                    endX: startCoords.x,
+                    endY: startCoords.y,
+                    snapPin: null
+                };
+
+                // 缓存其他引脚的坐标，用于吸附计算
+                allPinsCache = [];
+                const sourceCompId = pinId.substring(0, pinId.lastIndexOf('_'));
+                components.forEach(c => {
+                    if(c.id === sourceCompId) return;
+                    c.def.pins.forEach(p => {
+                        const pid = `${c.id}_${p.id}`;
+                        allPinsCache.push({
+                            id: pid,
+                            coords: getPinCoords(pid),
+                            element: document.querySelector(`[data-pinid="${pid}"]`)
+                        });
+                    });
+                });
+                return;
+            }
+
+            // 2. 否则判断是否按在了元件主体上 (开始移动元件)
+            const target = e.target.closest ? e.target.closest('.component-group') : null;
+            if (target && !e.target.classList.contains('terminal')) {
+                const id = target.getAttribute('data-id');
+                draggingComp = components.find(c => c.id === id);
+                if (draggingComp) {
+                    const pt = getEventPoint(e);
+                    const rect = canvas.getBoundingClientRect();
+                    dragOffset.x = pt.x - rect.left - draggingComp.x;
+                    dragOffset.y = pt.y - rect.top - draggingComp.y;
+                    trashCan.classList.add('visible'); 
+                }
+            }
+        }
+
+        function handleDragMove(e) {
+            // 1. 如果正在拖拽连线
+            if (tempWire) {
+                e.preventDefault();
+                const pt = getEventPoint(e);
+                const rect = canvas.getBoundingClientRect();
+                let rawX = pt.x - rect.left;
+                let rawY = pt.y - rect.top;
+
+                let minDist = 30; // 吸附半径（像素）
+                let closestPin = null;
+
+                // 计算距离并查找最近的吸附点
+                allPinsCache.forEach(p => {
+                    if(p.element) p.element.classList.remove('active'); // 重置所有高亮
+                    let dx = rawX - p.coords.x;
+                    let dy = rawY - p.coords.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestPin = p;
+                    }
+                });
+
+                if (closestPin) {
+                    // 发生吸附
+                    tempWire.endX = closestPin.coords.x;
+                    tempWire.endY = closestPin.coords.y;
+                    tempWire.snapPin = closestPin.id;
+                    if(closestPin.element) closestPin.element.classList.add('active'); // 高亮目标引脚
+                } else {
+                    // 自由移动
+                    tempWire.endX = rawX;
+                    tempWire.endY = rawY;
+                    tempWire.snapPin = null;
+                }
+                
+                renderWires(); // 仅重绘导线层，不刷新组件层影响性能
+                return;
+            }
+
+            // 2. 如果正在拖拽元件
+            if (draggingComp) {
+                e.preventDefault();
+                const pt = getEventPoint(e);
+                const rect = canvas.getBoundingClientRect();
+                
+                const trashRect = trashCan.getBoundingClientRect();
+                if (pt.x > trashRect.left && pt.x < trashRect.right && 
+                    pt.y > trashRect.top && pt.y < trashRect.bottom) {
+                    trashCan.classList.add('active');
+                    isHoveringTrash = true;
+                } else {
+                    trashCan.classList.remove('active');
+                    isHoveringTrash = false;
+                }
+
+                let rawX = pt.x - rect.left - dragOffset.x;
+                let rawY = pt.y - rect.top - dragOffset.y;
+                let snapX = Math.round(rawX / gridSize) * gridSize;
+                let snapY = Math.round(rawY / gridSize) * gridSize;
+                
+                draggingComp.x = snapX;
+                draggingComp.y = snapY;
+                
+                renderComponents();
+                renderWires();
+            }
+        }
+
+        function handleDragEnd(e) {
+            // 1. 如果是在拖拽连线结束
+            if (tempWire) {
+                // 清除所有的吸附高亮
+                allPinsCache.forEach(p => {
+                    if(p.element) p.element.classList.remove('active');
+                });
+
+                if (tempWire.snapPin) {
+                    const fromComp = tempWire.p1.substring(0, tempWire.p1.lastIndexOf('_'));
+                    const toComp = tempWire.snapPin.substring(0, tempWire.snapPin.lastIndexOf('_'));
+                    const sameComp = fromComp === toComp;
+                    const exist = wires.find(w => 
+                        (w.p1 === tempWire.p1 && w.p2 === tempWire.snapPin) || 
+                        (w.p2 === tempWire.p1 && w.p1 === tempWire.snapPin)
+                    );
+                    if(!exist && !sameComp) wires.push({ id: 'w_'+Date.now(), p1: tempWire.p1, p2: tempWire.snapPin });
+                }
+                
+                tempWire = null;
+                allPinsCache = [];
+                renderWires();
+                return;
+            }
+
+            // 2. 如果是在拖拽元件结束
+            if (draggingComp) {
+                if (isHoveringTrash) {
+                    components = components.filter(c => c.id !== draggingComp.id);
+                    wires = wires.filter(w => !w.p1.startsWith(draggingComp.id) && !w.p2.startsWith(draggingComp.id));
+                } else {
+                    const rect = canvas.getBoundingClientRect();
+                    draggingComp.x = Math.max(0, Math.min(rect.width - draggingComp.def.width, draggingComp.x));
+                    draggingComp.y = Math.max(0, Math.min(rect.height - draggingComp.def.height, draggingComp.y));
+                }
+                
+                draggingComp = null;
+                isHoveringTrash = false;
+                trashCan.classList.remove('visible', 'active');
+                
+                renderComponents();
+                renderWires();
+            }
+        }
+
+        // 重置画布
+        function resetCanvas() {
+            if(confirm("确定清空画布并重置吗？")) {
+                components = [];
+                wires = [];
+                compCounter = 0;
+                resetSimulation();
+                renderComponents();
+                renderWires();
+            }
+        }
+
+        function resetSimulation() {
+            isSimulating = false;
+            conductingWireIds = new Set();
+            document.getElementById('btn-simulate').innerText = "启动实验";
+            document.getElementById('btn-simulate').classList.replace('btn-warning', 'btn-primary');
+            setStatus('idle', '等待操作 (未连接电源)');
+            document.querySelectorAll('.bulb-glass').forEach(el => el.classList.remove('active'));
+            renderWires();
+        }
+
+        function toggleSimulation() {
+            if(isSimulating) {
+                resetSimulation();
+            } else {
+                isSimulating = true;
+                renderComponents();
+                document.getElementById('btn-simulate').innerText = "停止实验";
+                document.getElementById('btn-simulate').classList.replace('btn-primary', 'btn-warning');
+                updateSimulation();
+            }
+        }
+
+        function setStatus(type, text) {
+            statusDisplay.className = `status-box status-${type}`;
+            statusDisplay.innerText = text;
+        }
+
+        function buildGraph(opts = {}) {
+            let graph = {};
+            const addEdge = (u, v, res, comp = null) => {
+                if(!graph[u]) graph[u] = [];
+                if(!graph[v]) graph[v] = [];
+                graph[u].push({to: v, res: res, comp: comp});
+                graph[v].push({to: u, res: res, comp: comp});
+            };
+
+            components.forEach(c => {
+                if(c.type === 'battery') return;
+                const p1 = `${c.id}_p1`;
+                const p2 = `${c.id}_p2`;
+                let res = c.def.res;
+                if(c.type === 'switch') res = c.isClosed ? 0 : 999999;
+                if(opts.applianceShort && (c.type === 'bulb' || c.type === 'resistor')) res = 0;
+                addEdge(p1, p2, res, c);
+            });
+
+            let effectiveWires = wires;
+            if(opts.breakWireIndex !== undefined && opts.breakWireIndex >= 0 && opts.breakWireIndex < wires.length) {
+                effectiveWires = wires.filter((_, i) => i !== opts.breakWireIndex);
+            }
+            effectiveWires.forEach(w => addEdge(w.p1, w.p2, 0, null));
+
+            if(opts.powerShort) {
+                const battery = components.find(c => c.type === 'battery');
+                if(battery) addEdge(`${battery.id}_p1`, `${battery.id}_p2`, 0, null);
+            }
+
+            return { graph, addEdge };
+        }
+
+        function dijkstra(graph, startPin, endPin) {
+            let dist = {};
+            let prev = {};
+            for(let node in graph) dist[node] = Infinity;
+            dist[startPin] = 0;
+            let pq = [startPin];
+            let visited = {};
+            while(pq.length > 0) {
+                pq.sort((a,b) => dist[a] - dist[b]);
+                let u = pq.shift();
+                if(visited[u]) continue;
+                visited[u] = true;
+                if(!graph[u]) continue;
+                for(let edge of graph[u]) {
+                    let alt = dist[u] + edge.res;
+                    if(alt < dist[edge.to]) {
+                        dist[edge.to] = alt;
+                        prev[edge.to] = { from: u, comp: edge.comp };
+                        pq.push(edge.to);
+                    }
+                }
+            }
+            return { dist, prev };
+        }
+
+        function getPathComps(prev, startPin, endPin) {
+            let comps = [];
+            let curr = endPin;
+            while(curr && curr !== startPin) {
+                let p = prev[curr];
+                if(p && p.comp) comps.push(p.comp);
+                curr = p ? p.from : null;
+            }
+            return comps;
+        }
+
+        function findAllReachableNodes(graph, startPin) {
+            let visited = new Set();
+            let queue = [startPin];
+            visited.add(startPin);
+            while(queue.length > 0) {
+                let u = queue.shift();
+                if(!graph[u]) continue;
+                for(let edge of graph[u]) {
+                    if(!visited.has(edge.to) && edge.res < 999999) {
+                        visited.add(edge.to);
+                        queue.push(edge.to);
+                    }
+                }
+            }
+            return visited;
+        }
+
+        function findAllConductingComps(graph, startPin, endPin) {
+            let reachableFromStart = findAllReachableNodes(graph, startPin);
+            if(!reachableFromStart.has(endPin)) return { comps: new Set(), wireEdges: new Set(), totalRes: Infinity };
+
+            let reverseReachable = findAllReachableNodes(graph, endPin);
+
+            let conductingNodes = new Set();
+            for(let node of reachableFromStart) {
+                if(reverseReachable.has(node)) conductingNodes.add(node);
+            }
+
+            let conductingComps = new Set();
+            let conductingEdges = new Set();
+            let hasLoad = false;
+            let hasShortPath = false;
+
+            for(let node of conductingNodes) {
+                if(!graph[node]) continue;
+                for(let edge of graph[node]) {
+                    if(conductingNodes.has(edge.to) && edge.res < 999999) {
+                        conductingEdges.add(node + '|' + edge.to);
+                        if(edge.comp) {
+                            conductingComps.add(edge.comp);
+                            if(edge.comp.type === 'bulb' || edge.comp.type === 'resistor') hasLoad = true;
+                        }
+                    }
+                }
+            }
+
+            let { dist } = dijkstra(graph, startPin, endPin);
+            let totalRes = dist[endPin];
+
+            return { comps: conductingComps, wireEdges: conductingEdges, totalRes, hasLoad };
+        }
+
+        function checkMeterPolarity(battery) {
+            if(!battery) return [];
+            const batP1 = `${battery.id}_p1`;
+            const batP2 = `${battery.id}_p2`;
+
+            let { graph } = buildGraph({});
+            let { dist, prev } = dijkstra(graph, batP1, batP2);
+            if(dist[batP2] >= 999999) return [];
+
+            let faults = [];
+            let currentPath = new Set();
+            let curr = batP2;
+            while(curr && curr !== batP1) {
+                currentPath.add(curr);
+                let p = prev[curr];
+                curr = p ? p.from : null;
+            }
+            currentPath.add(batP1);
+
+            components.forEach(c => {
+                if(c.type !== 'ammeter' && c.type !== 'voltmeter') return;
+                const cp1 = `${c.id}_p1`;
+                const cp2 = `${c.id}_p2`;
+
+                if(c.type === 'ammeter') {
+                    if(!currentPath.has(cp1) || !currentPath.has(cp2)) return;
+                    let p1InPath = false, p2InPath = false;
+                    let p1FromBatPositive = false, p2FromBatPositive = false;
+
+                    let checkCurr = batP2;
+                    let order = [];
+                    while(checkCurr && checkCurr !== batP1) {
+                        order.push(checkCurr);
+                        let p = prev[checkCurr];
+                        checkCurr = p ? p.from : null;
+                    }
+                    order.push(batP1);
+                    order.reverse();
+
+                    let idx1 = order.indexOf(cp1);
+                    let idx2 = order.indexOf(cp2);
+                    if(idx1 >= 0 && idx2 >= 0 && idx1 > idx2) {
+                        faults.push(`电流表(${c.id})正负接线柱接反`);
+                    }
+                }
+
+                if(c.type === 'voltmeter') {
+                    let connectedPins = { p1: [], p2: [] };
+                    wires.forEach(w => {
+                        if(w.p1 === cp1 || w.p2 === cp1) {
+                            connectedPins.p1.push(w.p1 === cp1 ? w.p2 : w.p1);
+                        }
+                        if(w.p1 === cp2 || w.p2 === cp2) {
+                            connectedPins.p2.push(w.p1 === cp2 ? w.p2 : w.p1);
+                        }
+                    });
+
+                    let p1Closer = Infinity, p2Closer = Infinity;
+                    let order = [];
+                    let checkCurr = batP2;
+                    while(checkCurr && checkCurr !== batP1) {
+                        order.push(checkCurr);
+                        let p = prev[checkCurr];
+                        checkCurr = p ? p.from : null;
+                    }
+                    order.push(batP1);
+                    order.reverse();
+
+                    connectedPins.p1.forEach(pin => {
+                        let idx = order.indexOf(pin);
+                        if(idx >= 0 && idx < p1Closer) p1Closer = idx;
+                    });
+                    connectedPins.p2.forEach(pin => {
+                        let idx = order.indexOf(pin);
+                        if(idx >= 0 && idx < p2Closer) p2Closer = idx;
+                    });
+
+                    if(p1Closer !== Infinity && p2Closer !== Infinity && p1Closer > p2Closer) {
+                        faults.push(`电压表(${c.id})正负接线柱接反`);
+                    }
+                }
+            });
+            return faults;
+        }
+
+        function checkRangeError(battery, totalRes) {
+            if(!battery || totalRes <= 0 || totalRes >= 999999) return [];
+            const voltage = 1.5;
+            const current = voltage / totalRes;
+            let faults = [];
+
+            components.forEach(c => {
+                if(c.type === 'ammeter') {
+                    if(current > 0.6) {
+                        faults.push(`电流表(${c.id})量程过小(电流${current.toFixed(2)}A > 0.6A量程)，可能烧毁`);
+                    } else if(current < 0.02) {
+                        faults.push(`电流表(${c.id})偏转过小(电流${current.toFixed(3)}A)，应换小量程`);
+                    }
+                }
+                if(c.type === 'voltmeter') {
+                    let connectedPins = { p1: [], p2: [] };
+                    const cp1 = `${c.id}_p1`;
+                    const cp2 = `${c.id}_p2`;
+                    wires.forEach(w => {
+                        if(w.p1 === cp1 || w.p2 === cp1) connectedPins.p1.push(w.p1 === cp1 ? w.p2 : w.p1);
+                        if(w.p1 === cp2 || w.p2 === cp2) connectedPins.p2.push(w.p1 === cp2 ? w.p2 : w.p1);
+                    });
+
+                    let measuredComps = new Set();
+                    connectedPins.p1.forEach(pin => {
+                        let compId = pin.substring(0, pin.lastIndexOf('_'));
+                        measuredComps.add(compId);
+                    });
+                    connectedPins.p2.forEach(pin => {
+                        let compId = pin.substring(0, pin.lastIndexOf('_'));
+                        measuredComps.add(compId);
+                    });
+
+                    let measuredRes = 0;
+                    measuredComps.forEach(cid => {
+                        let mc = components.find(x => x.id === cid);
+                        if(mc && (mc.type === 'bulb' || mc.type === 'resistor')) measuredRes += mc.def.res;
+                    });
+
+                    let measuredV = current * measuredRes;
+                    if(measuredV > 3) {
+                        faults.push(`电压表(${c.id})量程过小(电压${measuredV.toFixed(2)}V > 3V量程)，可能烧毁`);
+                    } else if(measuredV > 0 && measuredV < 0.1) {
+                        faults.push(`电压表(${c.id})偏转过小(电压${measuredV.toFixed(2)}V)，应换小量程`);
+                    }
+                }
+            });
+            return faults;
+        }
+
+        function autoDetectFaults(battery) {
+            let allFaults = [];
+
+            const batP1 = `${battery.id}_p1`;
+            const batP2 = `${battery.id}_p2`;
+
+            let { graph } = buildGraph({});
+            let { dist, prev } = dijkstra(graph, batP1, batP2);
+            let totalRes = dist[batP2];
+
+            if(totalRes === 0) {
+                let allResult = findAllConductingComps(graph, batP1, batP2);
+                if(!allResult.hasLoad) {
+                    allFaults.push('⚠️ 电源短路！电池正负极之间无用电器，会烧毁电源。');
+                } else {
+                    allFaults.push('⚠️ 用电器被短路！有导线直接绕过了用电器。');
+                }
+            }
+
+            if(totalRes >= 999999) {
+                let openSwitches = components.filter(c => c.type === 'switch' && !c.isClosed);
+                if(openSwitches.length > 0) {
+                    allFaults.push('断路: 开关未闭合。');
+                }
+
+                let { graph: closedGraph } = buildGraph({});
+                components.forEach(c => {
+                    if(c.type === 'switch' && !c.isClosed) {
+                        const p1 = `${c.id}_p1`;
+                        const p2 = `${c.id}_p2`;
+                        if(!closedGraph[p1]) closedGraph[p1] = [];
+                        if(!closedGraph[p2]) closedGraph[p2] = [];
+                        closedGraph[p1].push({to: p2, res: 0, comp: c});
+                        closedGraph[p2].push({to: p1, res: 0, comp: c});
+                    }
+                });
+                let result2 = dijkstra(closedGraph, batP1, batP2);
+                if(result2.dist[batP2] >= 999999) {
+                    allFaults.push('断路: 即使闭合所有开关，电路仍不连通，请检查导线连接。');
+                }
+            }
+
+            let polarityFaults = checkMeterPolarity(battery);
+            allFaults = allFaults.concat(polarityFaults);
+
+            if(totalRes > 0 && totalRes < 999999) {
+                let rangeFaults = checkRangeError(battery, totalRes);
+                allFaults = allFaults.concat(rangeFaults);
+            }
+
+            components.forEach(c => {
+                if(c.type === 'ammeter') {
+                    const cp1 = `${c.id}_p1`;
+                    const cp2 = `${c.id}_p2`;
+                    let p1Wires = wires.filter(w => w.p1 === cp1 || w.p2 === cp1);
+                    let p2Wires = wires.filter(w => w.p1 === cp2 || w.p2 === cp2);
+
+                    let p1Neighbors = p1Wires.map(w => (w.p1 === cp1 ? w.p2 : w.p1));
+                    let p2Neighbors = p2Wires.map(w => (w.p1 === cp2 ? w.p2 : w.p1));
+
+                    let p1CompIds = new Set(p1Neighbors.map(pin => pin.substring(0, pin.lastIndexOf('_'))));
+                    let p2CompIds = new Set(p2Neighbors.map(pin => pin.substring(0, pin.lastIndexOf('_'))));
+
+                    let sameComp = [...p1CompIds].filter(id => p2CompIds.has(id));
+                    sameComp.forEach(cid => {
+                        let mc = components.find(x => x.id === cid);
+                        if(mc && (mc.type === 'bulb' || mc.type === 'resistor')) {
+                            allFaults.push(`电流表(${c.id})并联在了${mc.type === 'bulb' ? '灯泡' : '电阻'}(${mc.id})两端，应串联使用。`);
+                        }
+                    });
+                }
+
+                if(c.type === 'voltmeter') {
+                    let { graph: testGraph } = buildGraph({});
+                    delete testGraph[`${c.id}_p1`];
+                    delete testGraph[`${c.id}_p2`];
+                    for(let node in testGraph) {
+                        testGraph[node] = testGraph[node].filter(e => e.to !== `${c.id}_p1` && e.to !== `${c.id}_p2`);
+                    }
+                    let testResult = dijkstra(testGraph, batP1, batP2);
+                    if(testResult.dist[batP2] >= 999999) {
+                        allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
+                    }
+                }
+            });
+
+            return allFaults;
+        }
+
+        function updateSimulation() {
+            const faultSelect = document.getElementById('fault-type').value;
+            const isFaultMode = document.getElementById('mode-select').value === 'fault';
+            
+            const battery = components.find(c => c.type === 'battery');
+            if(!battery) return setStatus('error', '未检测到电源，电路断路。');
+
+            const batP1 = `${battery.id}_p1`;
+            const batP2 = `${battery.id}_p2`;
+
+            if(isFaultMode && faultSelect !== 'none') {
+                let opts = {};
+                if(faultSelect === 'power_short') opts.powerShort = true;
+                if(faultSelect === 'appliance_short') opts.applianceShort = true;
+                if(faultSelect === 'wire_break') {
+                    if(wires.length > 0) {
+                        let breakIdx = Math.floor(Math.random() * wires.length);
+                        opts.breakWireIndex = breakIdx;
+                    }
+                }
+
+                let { graph } = buildGraph(opts);
+                if(!graph[batP1]) graph[batP1] = [];
+                if(!graph[batP2]) graph[batP2] = [];
+                let { dist, prev } = dijkstra(graph, batP1, batP2);
+                let totalRes = dist[batP2];
+
+                document.querySelectorAll('.bulb-glass').forEach(el => el.classList.remove('active'));
+                conductingWireIds = new Set();
+
+                if(faultSelect === 'meter_reversed') {
+                    let { graph: normalGraph } = buildGraph({});
+                    if(!normalGraph[batP1]) normalGraph[batP1] = [];
+                    if(!normalGraph[batP2]) normalGraph[batP2] = [];
+                    let normalResult = dijkstra(normalGraph, batP1, batP2);
+                    let normalRes = normalResult.dist[batP2];
+
+                    if(normalRes > 0 && normalRes < 999999) {
+                        lightBulbsAll(normalGraph, batP1, batP2);
+                        conductingWireIds = findConductingWiresAll(normalGraph, batP1, batP2);
+                        renderWires();
+                    }
+
+                    let meters = components.filter(c => c.type === 'ammeter' || c.type === 'voltmeter');
+                    if(meters.length === 0) return setStatus('error', '⚠️ 电路中没有电表，无法模拟接反故障。');
+                    let target = meters[Math.floor(Math.random() * meters.length)];
+                    let name = target.type === 'ammeter' ? '电流表' : '电压表';
+                    return setStatus('error', `⚠️ 故障: ${name}(${target.id})正负接线柱接反！指针反向偏转，可能损坏电表。`);
+                }
+
+                if(faultSelect === 'range_error') {
+                    let { graph: normalGraph } = buildGraph({});
+                    if(!normalGraph[batP1]) normalGraph[batP1] = [];
+                    if(!normalGraph[batP2]) normalGraph[batP2] = [];
+                    let normalResult = dijkstra(normalGraph, batP1, batP2);
+                    let normalRes = normalResult.dist[batP2];
+
+                    if(normalRes > 0 && normalRes < 999999) {
+                        lightBulbsAll(normalGraph, batP1, batP2);
+                        conductingWireIds = findConductingWiresAll(normalGraph, batP1, batP2);
+                        renderWires();
+                        let voltage = 1.5;
+                        let current = voltage / normalRes;
+                        let msgs = [];
+                        components.forEach(c => {
+                            if(c.type === 'ammeter') {
+                                msgs.push(`电流表(${c.id}): 实际电流${current.toFixed(3)}A，若量程0.6A则${current > 0.6 ? '超量程烧毁' : current < 0.06 ? '偏转太小读数不准' : '正常'}`);
+                            }
+                            if(c.type === 'voltmeter') {
+                                msgs.push(`电压表(${c.id}): 测量电压约${voltage.toFixed(1)}V，若量程3V则${voltage > 3 ? '超量程' : '正常'}，若量程15V则偏转过小`);
+                            }
+                        });
+                        if(msgs.length === 0) return setStatus('error', '⚠️ 电路中没有电表，无法模拟量程故障。');
+                        return setStatus('error', '⚠️ 量程分析:\n' + msgs.join('\n'));
+                    }
+                    return setStatus('error', '⚠️ 电路未导通，无法分析量程。');
+                }
+
+                if(faultSelect === 'wire_break') {
+                    if(totalRes >= 999999) {
+                        renderWires();
+                        return setStatus('error', '⚠️ 故障: 导线断路！电路中有一根导线断开，电路不通。');
+                    } else {
+                        lightBulbsAll(graph, batP1, batP2);
+                        conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                        renderWires();
+                        return setStatus('error', '⚠️ 故障: 导线断路！断开的导线未影响主回路，但部分支路可能失效。');
+                    }
+                }
+
+                if(totalRes >= 999999) {
+                    renderWires();
+                    return setStatus('idle', '状态: 断路 (开关未闭合或线路未连通)');
+                } else if(totalRes === 0) {
+                    let allResult = findAllConductingComps(graph, batP1, batP2);
+                    if(!allResult.hasLoad) {
+                        renderWires();
+                        return setStatus('error', '⚠️ 警告: 电源短路！请立即断开开关。');
+                    } else {
+                        conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                        renderWires();
+                        return setStatus('error', '⚠️ 用电器被短路！有导线直接绕过了用电器。灯泡不亮。');
+                    }
+                } else {
+                    lightBulbsAll(graph, batP1, batP2);
+                    conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                    renderWires();
+                    return setStatus('success', '状态: 导通。实验正常进行。');
+                }
+            }
+
+            let { graph } = buildGraph({});
+            if(!graph[batP1]) graph[batP1] = [];
+            if(!graph[batP2]) graph[batP2] = [];
+            let { dist, prev } = dijkstra(graph, batP1, batP2);
+            let totalRes = dist[batP2];
+
+            document.querySelectorAll('.bulb-glass').forEach(el => el.classList.remove('active'));
+            conductingWireIds = new Set();
+
+            if(isFaultMode && faultSelect === 'none') {
+                let detectedFaults = autoDetectFaults(battery);
+                if(detectedFaults.length > 0) {
+                    if(totalRes > 0 && totalRes < 999999) {
+                        lightBulbsAll(graph, batP1, batP2);
+                        conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                        renderWires();
+                    }
+                    return setStatus('error', '🔍 自动识别:\n' + detectedFaults.join('\n'));
+                }
+            }
+
+            if(totalRes >= 999999) {
+                renderWires();
+                setStatus('idle', '状态: 断路 (开关未闭合或线路未连通)');
+            } else if(totalRes === 0) {
+                let allResult = findAllConductingComps(graph, batP1, batP2);
+                if(!allResult.hasLoad) {
+                    renderWires();
+                    setStatus('error', '⚠️ 警告: 电源短路！请立即断开开关。');
+                } else {
+                    conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                    renderWires();
+                    setStatus('error', '⚠️ 用电器被短路！有导线直接绕过了用电器。');
+                }
+            } else {
+                lightBulbsAll(graph, batP1, batP2);
+                conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
+                renderWires();
+                setStatus('success', '状态: 导通。实验正常进行。');
+            }
+        }
+
+        function lightBulbsAll(graph, startPin, endPin) {
+            let result = findAllConductingComps(graph, startPin, endPin);
+            for(let comp of result.comps) {
+                if(comp.type === 'bulb') {
+                    const compGroup = document.querySelector(`g[data-id="${comp.id}"]`);
+                    if(compGroup) compGroup.querySelector('.bulb-glass').classList.add('active');
+                }
+            }
+        }
+
+        function lightBulbs(prev, startPin, endPin) {
+            let curr = endPin;
+            while(curr && curr !== startPin) {
+                let p = prev[curr];
+                if(p && p.comp && p.comp.type === 'bulb') {
+                    const compGroup = document.querySelector(`g[data-id="${p.comp.id}"]`);
+                    if(compGroup) compGroup.querySelector('.bulb-glass').classList.add('active');
+                }
+                curr = p ? p.from : null;
+            }
+        }
+
+        function findConductingWiresAll(graph, startPin, endPin) {
+            let result = findAllConductingComps(graph, startPin, endPin);
+            let ids = new Set();
+            wires.forEach(w => {
+                if(result.wireEdges.has(w.p1 + '|' + w.p2) || result.wireEdges.has(w.p2 + '|' + w.p1)) {
+                    ids.add(w.id);
+                }
+            });
+            return ids;
+        }
+
+        function findConductingWires(prev, startPin, endPin) {
+            let pathEdges = new Set();
+            let curr = endPin;
+            while(curr && curr !== startPin) {
+                let p = prev[curr];
+                if(p) {
+                    let a = p.from, b = curr;
+                    pathEdges.add(a + '|' + b);
+                    pathEdges.add(b + '|' + a);
+                }
+                curr = p ? p.from : null;
+            }
+            let ids = new Set();
+            wires.forEach(w => {
+                if(pathEdges.has(w.p1 + '|' + w.p2) || pathEdges.has(w.p2 + '|' + w.p1)) {
+                    ids.add(w.id);
+                }
+            });
+            return ids;
+        }
+        function clearAndBuild() {
+            components = [];
+            wires = [];
+            compCounter = 0;
+            resetSimulation();
+        }
+
+        function addComp(type, x, y, closed) {
+            const comp = {
+                id: 'comp_' + (++compCounter),
+                type: type,
+                x: x,
+                y: y,
+                def: CompDefs[type],
+                isClosed: !!closed
+            };
+            components.push(comp);
+            return comp;
+        }
+
+        function addWire(c1, p1, c2, p2) {
+            wires.push({ id: 'w_' + Date.now() + '_' + Math.random(), p1: c1.id + '_' + p1, p2: c2.id + '_' + p2 });
+        }
+
+        function finishBuild() {
+            renderComponents();
+            renderWires();
+        }
+
+        function genSeriesCircuit() {
+            clearAndBuild();
+            const bat = addComp('battery', 140, 40);
+            const sw = addComp('switch', 280, 40, true);
+            const b1 = addComp('bulb', 360, 80);
+            const b2 = addComp('bulb', 360, 200);
+            addWire(bat, 'p2', sw, 'p1');
+            addWire(sw, 'p2', b1, 'p1');
+            addWire(b1, 'p2', b2, 'p1');
+            addWire(b2, 'p2', bat, 'p1');
+            finishBuild();
+        }
+
+        function genParallelCircuit() {
+            clearAndBuild();
+            const bat = addComp('battery', 40, 140);
+            const sw = addComp('switch', 140, 40, true);
+            const b1 = addComp('bulb', 280, 60);
+            const b2 = addComp('bulb', 280, 200);
+            addWire(bat, 'p2', sw, 'p1');
+            addWire(sw, 'p2', b1, 'p1');
+            addWire(sw, 'p2', b2, 'p1');
+            addWire(b1, 'p2', b2, 'p2');
+            addWire(b2, 'p2', bat, 'p1');
+            finishBuild();
+        }
+
+        function genAmmeterCircuit() {
+            clearAndBuild();
+            const bat = addComp('battery', 80, 40);
+            const sw = addComp('switch', 220, 40, true);
+            const am = addComp('ammeter', 340, 80);
+            const b1 = addComp('bulb', 340, 200);
+            addWire(bat, 'p2', sw, 'p1');
+            addWire(sw, 'p2', am, 'p1');
+            addWire(am, 'p2', b1, 'p1');
+            addWire(b1, 'p2', bat, 'p1');
+            finishBuild();
+        }
+
+        function genVoltmeterCircuit() {
+            clearAndBuild();
+            const bat = addComp('battery', 80, 40);
+            const sw = addComp('switch', 220, 40, true);
+            const b1 = addComp('bulb', 340, 120);
+            const vm = addComp('voltmeter', 200, 180);
+            addWire(bat, 'p2', sw, 'p1');
+            addWire(sw, 'p2', b1, 'p1');
+            addWire(b1, 'p2', bat, 'p1');
+            addWire(vm, 'p1', b1, 'p1');
+            addWire(vm, 'p2', b1, 'p2');
+            finishBuild();
+        }
+
+        function genFullCircuit() {
+            clearAndBuild();
+            const bat = addComp('battery', 40, 40);
+            const sw = addComp('switch', 180, 40, true);
+            const am = addComp('ammeter', 300, 60);
+            const b1 = addComp('bulb', 160, 200);
+            const b2 = addComp('bulb', 300, 200);
+            const vm = addComp('voltmeter', 60, 180);
+            addWire(bat, 'p2', sw, 'p1');
+            addWire(sw, 'p2', am, 'p1');
+            addWire(am, 'p2', b1, 'p1');
+            addWire(b1, 'p2', b2, 'p1');
+            addWire(b2, 'p2', bat, 'p1');
+            addWire(vm, 'p1', am, 'p2');
+            addWire(vm, 'p2', bat, 'p1');
+            finishBuild();
+        }
+    </script>
+</body>
+</html>
