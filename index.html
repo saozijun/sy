@@ -467,7 +467,7 @@
         // ================= 练习任务管理 (增删改查) =================
         const STORE_KEY = 'circuit_custom_tasks';
         let allPractices = [];
-        let lastSelectedPracticeId = null; // 用于记录创建模式前的练习题
+        let lastSelectedPracticeId = null;
 
         function initPractices() {
             const defaults = [
@@ -476,9 +476,9 @@
                     name: '基础串联电路',
                     description: '请使用已提供的电源、开关和灯泡，搭建一个基本的闭合串联电路。完成后启动实验并点亮灯泡！',
                     components: [
-                        { id: 'comp_1', type: 'battery', x: 100, y: 100, isClosed: false },
-                        { id: 'comp_2', type: 'switch', x: 280, y: 140, isClosed: false },
-                        { id: 'comp_3', type: 'bulb', x: 160, y: 220, isClosed: false }
+                        { id: 'comp_1', type: 'battery', x: 100, y: 180, isClosed: false },
+                        { id: 'comp_2', type: 'switch', x: 280, y: 180, isClosed: false },
+                        { id: 'comp_3', type: 'bulb', x: 200, y: 110, isClosed: false }
                     ],
                     wires: [],
                     isCustom: false
@@ -488,11 +488,11 @@
                     name: '并联电路挑战',
                     description: '请使用提供的电源、两个灯泡、两个开关。使两个开关分别独立控制两个灯泡（并联关系）。',
                     components: [
-                        { id: 'comp_1', type: 'battery', x: 80, y: 100, isClosed: false },
-                        { id: 'comp_2', type: 'bulb', x: 280, y: 80, isClosed: false },
-                        { id: 'comp_3', type: 'bulb', x: 280, y: 200, isClosed: false },
-                        { id: 'comp_4', type: 'switch', x: 180, y: 80, isClosed: false },
-                        { id: 'comp_5', type: 'switch', x: 180, y: 200, isClosed: false }
+                        { id: 'comp_1', type: 'battery', x: 80, y: 180, isClosed: false },
+                        { id: 'comp_2', type: 'bulb', x: 280, y: 170, isClosed: false },
+                        { id: 'comp_3', type: 'bulb', x: 280, y: 290, isClosed: false },
+                        { id: 'comp_4', type: 'switch', x: 180, y: 180, isClosed: false },
+                        { id: 'comp_5', type: 'switch', x: 180, y: 300, isClosed: false }
                     ],
                     wires: [],
                     isCustom: false
@@ -561,24 +561,16 @@
 
         // ================= 创建新练习流程 =================
         window.startCreatePractice = function() {
-            // 记录当前的练习，以便取消时恢复
             lastSelectedPracticeId = document.getElementById('practice-select').value;
-            
-            // 切换面板 UI 为创建模式
             document.getElementById('practice-view-mode').classList.add('d-none');
             document.getElementById('practice-edit-mode').classList.remove('d-none');
-            
-            // 清空画布并准备让用户摆放
             resetCanvas(true);
             setStatus('idle', '创设新练习：请在画布上摆放所需元件和连线...');
         };
 
         window.cancelCreatePractice = function() {
-            // 恢复 UI 面板
             document.getElementById('practice-edit-mode').classList.add('d-none');
             document.getElementById('practice-view-mode').classList.remove('d-none');
-            
-            // 恢复之前选中的练习
             if (lastSelectedPracticeId) {
                 document.getElementById('practice-select').value = lastSelectedPracticeId;
                 loadSelectedPractice();
@@ -616,15 +608,12 @@
             localStorage.setItem(STORE_KEY, JSON.stringify(customs));
 
             bootstrap.Modal.getInstance(document.getElementById('saveTaskModal')).hide();
-            
             document.getElementById('task-name-input').value = '';
             document.getElementById('task-desc-input').value = '';
 
-            // 保存成功后退出创建模式 UI
             document.getElementById('practice-edit-mode').classList.add('d-none');
             document.getElementById('practice-view-mode').classList.remove('d-none');
 
-            // 重新初始化列表并选中新的练习
             initPractices();
             document.getElementById('practice-select').value = newTask.id;
             loadSelectedPractice();
@@ -660,13 +649,11 @@
                 return;
             }
 
-            // 检查整体状态是否异常（短路或断路）
             if (statusDisplay.classList.contains('status-error') || statusDisplay.classList.contains('status-idle')) {
                 resultDiv.innerHTML = '<span class="text-danger">任务失败：电路存在故障、短路或未能连通。</span>';
                 return;
             }
             
-            // 检查画布中是否有灯泡，若有则必须全部发光
             const bulbs = components.filter(c => c.type === 'bulb');
             if(bulbs.length > 0) {
                 let allLit = true;
@@ -686,22 +673,17 @@
                     resultDiv.innerHTML = '<span class="text-danger">任务失败：部分灯泡未能发光，请检查支路连线。</span>';
                 }
             } else {
-                // 如果练习不包含灯泡（比如测电压），只要没报错就算通过
                 resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！任务验证通过！电路无异常。</span>';
             }
         };
 
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // 初始化练习数据
             initPractices();
 
-            // --- 场景模式切换逻辑 (课中演示 / 课后练习) ---
             document.getElementById('scene-select').addEventListener('change', (e) => {
                 const val = e.target.value;
                 const practicePanel = document.getElementById('practice-panel');
                 
-                // 每次切换时重置创建UI状态，防止从创建状态直接切走导致的UI混乱
                 document.getElementById('practice-edit-mode').classList.add('d-none');
                 document.getElementById('practice-view-mode').classList.remove('d-none');
 
@@ -711,7 +693,7 @@
                     loadSelectedPractice(); 
                 } else {
                     practicePanel.classList.add('d-none');
-                    resetCanvas(true); // 切换回自由沙盒时清空
+                    resetCanvas(true);
                     setStatus('idle', '等待操作：可自由搭建电路。');
                 }
             });
@@ -1366,47 +1348,101 @@
             return { dist, prev };
         }
 
-        function findAllReachableNodes(graph, startPin) {
-            let visited = new Set(), queue = [startPin];
-            visited.add(startPin);
-            while(queue.length > 0) {
-                let u = queue.shift();
-                if(!graph[u]) continue;
-                for(let edge of graph[u]) {
-                    if(!visited.has(edge.to) && edge.res < 999999) {
-                        visited.add(edge.to); queue.push(edge.to);
-                    }
-                }
-            }
-            return visited;
-        }
-
+        // ================= 核心修复逻辑：拓扑去死胡同算法 =================
         function findAllConductingComps(graph, startPin, endPin) {
-            let reachableFromStart = findAllReachableNodes(graph, startPin);
-            if(!reachableFromStart.has(endPin)) return { comps: new Set(), wireEdges: new Set(), totalRes: Infinity };
+            let workingGraph = {};
+            let degrees = {};
+            let validEdges = [];
 
-            let reverseReachable = findAllReachableNodes(graph, endPin);
-            let conductingNodes = new Set();
-            for(let node of reachableFromStart) if(reverseReachable.has(node)) conductingNodes.add(node);
+            // 1. 初始化度数，并剥离断开的元件（电阻无穷大）
+            for(let node in graph) degrees[node] = 0;
 
-            let conductingComps = new Set(), conductingEdges = new Set(), hasLoad = false;
-
-            for(let node of conductingNodes) {
-                if(!graph[node]) continue;
-                for(let edge of graph[node]) {
-                    if(conductingNodes.has(edge.to) && edge.res < 999999) {
-                        conductingEdges.add(node + '|' + edge.to);
-                        if(edge.comp) {
-                            conductingComps.add(edge.comp);
-                            if(edge.comp.type === 'bulb' || edge.comp.type === 'resistor') hasLoad = true;
+            for (let u in graph) {
+                workingGraph[u] = [];
+                for (let edge of graph[u]) {
+                    if (edge.res < 999999) { // 只看通路
+                        workingGraph[u].push({...edge});
+                        degrees[u]++;
+                        if (u < edge.to) { // 避免双向边重复计算
+                            validEdges.push({u: u, v: edge.to, comp: edge.comp});
                         }
                     }
                 }
             }
 
+            // 2. 找出所有度为1的节点（死胡同尽头），排除电源节点
+            let queue = [];
+            for (let node in degrees) {
+                if (degrees[node] === 1 && node !== startPin && node !== endPin) {
+                    queue.push(node);
+                }
+            }
+
+            let removedNodes = new Set();
+            
+            // 3. 剥洋葱式剪枝：不断去掉死胡同，直到只剩下完整回路
+            while (queue.length > 0) {
+                let u = queue.shift();
+                if (removedNodes.has(u)) continue;
+                removedNodes.add(u);
+                degrees[u] = 0;
+
+                // 找到与它相连的那个节点，度数减1
+                for (let edge of workingGraph[u]) {
+                    let v = edge.to;
+                    if (!removedNodes.has(v)) {
+                        degrees[v]--;
+                        // 如果那个节点也变成了新的死胡同尽头，加进队列继续剪
+                        if (degrees[v] === 1 && v !== startPin && v !== endPin) {
+                            queue.push(v);
+                        }
+                    }
+                }
+            }
+
+            // 4. 在剪裁干净的“骨架”上，从电源正极出发进行遍历，能摸到的才是通电的
+            let reachable = new Set();
+            let bfsQueue = [startPin];
+            reachable.add(startPin);
+
+            while (bfsQueue.length > 0) {
+                let u = bfsQueue.shift();
+                if(removedNodes.has(u)) continue; 
+
+                for (let edge of workingGraph[u]) {
+                    let v = edge.to;
+                    if (!removedNodes.has(v) && !reachable.has(v)) {
+                        reachable.add(v);
+                        bfsQueue.push(v);
+                    }
+                }
+            }
+
+            // 5. 组装结果
+            let conductingComps = new Set();
+            let conductingEdges = new Set();
+            let hasLoad = false;
+
+            for (let e of validEdges) {
+                // 如果这条边两端都没被剪掉，且都能被电源摸到
+                if (!removedNodes.has(e.u) && !removedNodes.has(e.v) && reachable.has(e.u) && reachable.has(e.v)) {
+                    conductingEdges.add(e.u + '|' + e.v);
+                    conductingEdges.add(e.v + '|' + e.u);
+                    if (e.comp) {
+                        conductingComps.add(e.comp);
+                        if (e.comp.type === 'bulb' || e.comp.type === 'resistor') {
+                            hasLoad = true;
+                        }
+                    }
+                }
+            }
+
+            // 算出总电阻供其他逻辑使用
             let { dist } = dijkstra(graph, startPin, endPin);
+
             return { comps: conductingComps, wireEdges: conductingEdges, totalRes: dist[endPin], hasLoad };
         }
+        // =================================================================
 
         function getZeroResCluster(graph, startPin, ignoreCompId) {
             let cluster = new Set();
@@ -1601,7 +1637,6 @@
                 setStatus('success', '状态: 导通。实验正常进行。');
             }
 
-            // 自动触发练习模式的任务检测反馈
             if(document.getElementById('scene-select').value === 'practice') {
                 const resDiv = document.getElementById('practice-result');
                 if (resDiv.innerHTML.includes('失败')) resDiv.innerHTML = '';
