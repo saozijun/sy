@@ -21,7 +21,7 @@
             user-select: none;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            height: 100dvh;
             margin: 0;
             background-color: #e9ecef;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -172,13 +172,13 @@
     <!-- 顶部控制区 -->
     <div class="header-area d-flex justify-content-between align-items-center">
         <h5 class="m-0 text-truncate" style="max-width: 20%;">电路实验</h5>
-        <div class="d-flex gap-1 flex-wrap">
+        <!-- <div class="d-flex gap-1 flex-wrap">
             <button class="btn btn-sm btn-outline-success" onclick="genSeriesCircuit()">串联</button>
             <button class="btn btn-sm btn-outline-success" onclick="genParallelCircuit()">并联</button>
             <button class="btn btn-sm btn-outline-success" onclick="genAmmeterCircuit()">测电流</button>
             <button class="btn btn-sm btn-outline-success" onclick="genVoltmeterCircuit()">测电压</button>
             <button class="btn btn-sm btn-outline-success" onclick="genFullCircuit()">完整电路</button>
-        </div>
+        </div> -->
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" id="scene-select">
                 <option value="class">课中演示</option>
@@ -365,9 +365,9 @@
                 pins: [{id: 'p1', x: 25, y: 50}, {id: 'p2', x: 35, y: 50}]
             },
             resistor: {
-                width: 60, height: 40, res: 10, type: 'load',
-                svg: `<rect x="10" y="12" width="40" height="16" fill="#fff" stroke="#333" stroke-width="2"/><text x="18" y="25" font-size="12">10Ω</text>`,
-                pins: [{id: 'p1', x: 10, y: 20}, {id: 'p2', x: 50, y: 20}]
+                width: 40, height: 40, res: 10, type: 'load',
+                svg: `<rect x="0" y="12" width="40" height="16" fill="#fff" stroke="#333" stroke-width="2"/><text x="12" y="25" font-size="12">10Ω</text>`,
+                pins: [{id: 'p1', x: 0, y: 20}, {id: 'p2', x: 40, y: 20}]
             },
             switch: {
                 width: 60, height: 40, res: 0, type: 'switch',
@@ -727,7 +727,11 @@
                 draggingComp.x = snapX;
                 draggingComp.y = snapY;
                 
-                renderComponents();
+                // renderComponents();
+                const compGroup = document.querySelector(`g[data-id="${draggingComp.id}"]`);
+                if (compGroup) {
+                    compGroup.setAttribute('transform', `translate(${draggingComp.x}, ${draggingComp.y})`);
+                }
                 renderWires();
             }
         }
