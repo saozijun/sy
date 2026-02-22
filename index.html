@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>初中物理：极简电路连接模拟器</title>
+    <title>物理电路实验</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
@@ -125,20 +125,7 @@
         .wire { stroke: var(--wire-color); stroke-width: 3; fill: none; stroke-linejoin: round; cursor: pointer; transition: stroke 0.3s; }
         .wire:hover { stroke: #dc3545; }
         .wire-click-area { stroke: transparent; stroke-width: 20; fill: none; cursor: pointer; }
-        .wire-flow {
-            stroke: #ffeb3b;
-            stroke-width: 4;
-            fill: none;
-            stroke-linejoin: round;
-            pointer-events: none;
-            stroke-dasharray: 10, 10;
-            stroke-linecap: round;
-            animation: wire-flow-anim 1s linear infinite;
-            filter: drop-shadow(0 0 3px #ffc107);
-        }
-        @keyframes wire-flow-anim {
-            to { stroke-dashoffset: -20; }
-        }
+        
         .component-group { cursor: grab; }
         .component-group:active { cursor: grabbing; }
         .terminal { fill: #dc3545; stroke: #fff; stroke-width: 2; cursor: crosshair; transition: r 0.2s; }
@@ -179,14 +166,7 @@
 
     <!-- 顶部控制区 -->
     <div class="header-area d-flex justify-content-between align-items-center">
-        <h5 class="m-0 text-truncate" style="max-width: 20%;">原理图模拟</h5>
-        <!-- <div class="d-flex gap-1 flex-wrap">
-            <button class="btn btn-sm btn-outline-success" onclick="genSeriesCircuit()">串联</button>
-            <button class="btn btn-sm btn-outline-success" onclick="genParallelCircuit()">并联</button>
-            <button class="btn btn-sm btn-outline-success" onclick="genAmmeterCircuit()">测电流</button>
-            <button class="btn btn-sm btn-outline-success" onclick="genVoltmeterCircuit()">测电压</button>
-            <button class="btn btn-sm btn-outline-success" onclick="genFullCircuit()">完整电路</button>
-        </div> -->
+        <h5 class="m-0 text-truncate" style="max-width: 20%;">物理电路实验</h5>
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" id="scene-select">
                 <option value="class">课中演示</option>
@@ -318,7 +298,7 @@
                     <p class="text-muted small"><strong>按住</strong>元件两端的引脚节点，拖动进行连线。点击已连好的导线可将其删除。</p>
                     <hr>
                     <h6>第三步：启动与诊断</h6>
-                    <p class="text-muted small">确保电路闭合后，点击“启动实验”，观察灯泡发光、电流动画或底部状态栏的故障提示。</p>
+                    <p class="text-muted small">确保电路闭合后，点击“启动实验”，观察灯泡发光或底部状态栏的故障提示。</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">我知道了</button>
@@ -844,22 +824,6 @@
                 wireGroup.appendChild(clickArea);
                 wireGroup.appendChild(path);
                 layerWires.appendChild(wireGroup);
-
-                if(isSimulating && conductingWireIds.has(wire.id)) {
-                    // 判断电流拓扑方向并应用反向动画
-                    let d1 = window.flowDist ? window.flowDist[wire.p1] : 0;
-                    let d2 = window.flowDist ? window.flowDist[wire.p2] : 0;
-                    if(d1 === undefined) d1 = 0; if(d2 === undefined) d2 = 0;
-                    let reverseFlow = (d1 > d2);
-
-                    const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    flow.setAttribute('d', pathData);
-                    flow.setAttribute('class', 'wire-flow');
-                    if (reverseFlow) {
-                        flow.style.animationDirection = 'reverse';
-                    }
-                    layerWires.appendChild(flow);
-                }
             });
 
             if (tempWire) {
@@ -1226,8 +1190,6 @@
 
             const batP1 = `${battery.id}_p1`, batP2 = `${battery.id}_p2`;
             
-            window.flowDist = calculateFlowDistMap(batP1);
-
             let opts = {};
             if(isFaultMode && faultSelect !== 'none') {
                 if(faultSelect === 'power_short') opts.powerShort = true;
@@ -1316,92 +1278,6 @@
                 if(result.wireEdges.has(w.p1 + '|' + w.p2) || result.wireEdges.has(w.p2 + '|' + w.p1)) ids.add(w.id);
             });
             return ids;
-        }
-
-        function clearAndBuild() {
-            components = []; wires = []; compCounter = 0; resetSimulation();
-        }
-
-        function addComp(type, x, y, closed) {
-            const comp = { id: 'comp_' + (++compCounter), type: type, x: x, y: y, def: CompDefs[type], isClosed: !!closed };
-            components.push(comp); return comp;
-        }
-
-        function addWire(c1, p1, c2, p2) { wires.push({ id: 'w_' + Date.now() + '_' + Math.random(), p1: c1.id + '_' + p1, p2: c2.id + '_' + p2 }); }
-        function finishBuild() { renderComponents(); renderWires(); }
-
-        function genSeriesCircuit() {
-            clearAndBuild();
-            const bat = addComp('battery', 100, 40);
-            const sw = addComp('switch', 240, 40, true);
-            const b1 = addComp('bulb', 240, 160);
-            const b2 = addComp('bulb', 100, 160);
-            addWire(bat, 'p2', sw, 'p1'); 
-            addWire(sw, 'p2', b1, 'p2'); 
-            addWire(b1, 'p1', b2, 'p2'); 
-            addWire(b2, 'p1', bat, 'p1'); 
-            finishBuild();
-        }
-
-        function genParallelCircuit() {
-            clearAndBuild();
-            const bat = addComp('battery', 100, 100);
-            const sw = addComp('switch', 240, 100, true);
-            const b1 = addComp('bulb', 240, 200);
-            const b2 = addComp('bulb', 240, 300);
-            addWire(bat, 'p2', sw, 'p1');
-            addWire(sw, 'p2', b1, 'p2');
-            addWire(sw, 'p2', b2, 'p2');
-            addWire(bat, 'p1', b1, 'p1');
-            addWire(bat, 'p1', b2, 'p1');
-            finishBuild();
-        }
-
-        function genAmmeterCircuit() {
-            clearAndBuild();
-            const bat = addComp('battery', 100, 40);
-            const sw = addComp('switch', 240, 40, true);
-            const am = addComp('ammeter', 240, 160);
-            const b1 = addComp('bulb', 100, 160);
-            addWire(bat, 'p2', sw, 'p1');
-            addWire(sw, 'p2', am, 'p1');
-            addWire(am, 'p2', b1, 'p2');
-            addWire(b1, 'p1', bat, 'p1');
-            finishBuild();
-        }
-
-        function genVoltmeterCircuit() {
-            clearAndBuild();
-            const bat = addComp('battery', 100, 40);
-            const sw = addComp('switch', 240, 40, true);
-            const b1 = addComp('bulb', 100, 160);
-            const vm = addComp('voltmeter', 100, 260); 
-            addWire(bat, 'p2', sw, 'p1');
-            addWire(sw, 'p2', b1, 'p2');
-            addWire(b1, 'p1', bat, 'p1');
-            addWire(vm, 'p2', b1, 'p2');
-            addWire(vm, 'p1', b1, 'p1');
-            finishBuild();
-        }
-
-        function genFullCircuit() {
-            clearAndBuild();
-            const bat = addComp('battery', 100, 40);
-            const sw = addComp('switch', 240, 40, true);
-            const am = addComp('ammeter', 380, 40);
-            const b1 = addComp('bulb', 380, 160);
-            const b2 = addComp('bulb', 240, 160);
-            const vm = addComp('voltmeter', 380, 260);
-            
-            addWire(bat, 'p2', sw, 'p1');
-            addWire(sw, 'p2', am, 'p1');
-            addWire(am, 'p2', b1, 'p2');
-            addWire(b1, 'p1', b2, 'p2');
-            addWire(b2, 'p1', bat, 'p1');
-            
-            addWire(vm, 'p2', b1, 'p2');
-            addWire(vm, 'p1', b1, 'p1');
-            finishBuild();
         }
     </script>
 </body>
