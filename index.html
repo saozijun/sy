@@ -34,13 +34,18 @@
             padding: 10px;
         }
         /* 元件库水平滚动区 */
+        #palette-wrapper {
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            transition: max-height 0.3s ease;
+        }
         .component-palette {
             display: flex;
             overflow-x: auto;
             white-space: nowrap;
             padding: 10px;
-            background: #fff;
-            border-bottom: 1px solid #ddd;
             gap: 10px;
             -webkit-overflow-scrolling: touch;
         }
@@ -61,6 +66,22 @@
         .palette-item:active { background-color: #e9ecef; }
         .palette-item svg { width: 40px; height: 40px; margin-bottom: 5px; pointer-events: none; }
         .palette-item span { font-size: 12px; color: #495057; pointer-events: none; }
+        #palette-toggle {
+            cursor: pointer;
+            font-size: 12px;
+            color: #6c757d;
+            padding: 6px 0;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-top: 1px solid #eee;
+        }
+        #palette-toggle:hover { background-color: #e2e6ea; }
+        #palette-toggle svg {
+            pointer-events: none;
+        }
+        #palette-toggle.collapsed svg {
+            transform: rotate(180deg);
+        }
         
         /* 核心画布区 */
         .canvas-container {
@@ -153,9 +174,9 @@
         }
 
         /* SVG 样式 */
-        .wire { stroke: var(--wire-color); stroke-width: 3; fill: none; stroke-linejoin: round; cursor: pointer; transition: stroke 0.3s; }
-        .wire:hover { stroke: #dc3545; }
-        .wire-click-area { stroke: transparent; stroke-width: 20; fill: none; cursor: pointer; }
+        .wire { stroke: var(--wire-color); stroke-width: 3; fill: none; stroke-linejoin: round; transition: stroke 0.3s; }
+        /* 【关键修复】将感应区 stroke-width 从 25 增加到 40，大幅提升点击率 */
+        .wire-click-area { stroke: transparent; stroke-width: 40; fill: none; cursor: pointer; }
         
         .component-group { cursor: grab; }
         .component-group:active { cursor: grabbing; }
@@ -172,6 +193,9 @@
             stroke: #fbc02d;
         }
         .bulb-cross.active { stroke: #fbc02d; }
+        
+        /* 读数显示文本 */
+        .meter-reading { font-family: monospace; font-weight: bold; pointer-events: none; }
 
         /* 状态与控制栏 */
         .footer-area {
@@ -198,13 +222,13 @@
 
     <!-- 顶部控制区 -->
     <div class="header-area d-flex justify-content-between align-items-center">
-        <h5 class="m-0 text-truncate" style="max-width: 20%;">物理电路实验</h5>
-        <div class="d-flex gap-2">
-            <select class="form-select form-select-sm" id="scene-select">
+        <h5 class="m-0 text-truncate" style="max-width: 25%;">物理电路实验</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" id="scene-select" style="width: auto;">
                 <option value="class">课中演示</option>
                 <option value="practice">课后练习</option>
             </select>
-            <select class="form-select form-select-sm" id="mode-select">
+            <select class="form-select form-select-sm" id="mode-select" style="width: auto;">
                 <option value="basic">基础搭建</option>
                 <option value="fault">故障模拟</option>
             </select>
@@ -216,77 +240,93 @@
         <div class="d-flex align-items-center justify-content-between gap-2">
             <span style="font-size: 13px; white-space: nowrap;">植入故障:</span>
             <select class="form-select form-select-sm" id="fault-type">
-                <option value="none">无故障 (自动识别)</option>
-                <option value="power_short">电源短路</option>
-                <option value="appliance_short">用电器短路</option>
-                <option value="wire_break">导线断路</option>
-                <option value="range_error">量程选错</option>
+                <option value="none">无故障 (自由搭建识别)</option>
+                <option value="power_short">1. 电源短路</option>
+                <option value="appliance_short">2. 用电器短路</option>
+                <option value="wire_break">3. 导线断路</option>
+                <option value="range_error">4. 电表量程选错</option>
             </select>
             <button style="width: 80px;" class="btn btn-sm btn-outline-danger" id="btn-trigger-fault">触发</button>
         </div>
     </div>
 
     <!-- 物理原理图符号库 -->
-    <div class="component-palette" id="palette">
-        <div class="palette-item" data-type="battery">
-            <svg viewBox="0 0 60 40">
-                <path d="M 5 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 55 20" stroke="#333" stroke-width="2"/>
-                <path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/>
-                <text x="12" y="15" font-size="12">+</text>
-                <text x="42" y="15" font-size="12">-</text>
-            </svg>
-            <span>电源</span>
+    <div id="palette-wrapper">
+        <div class="component-palette" id="palette">
+            <div class="palette-item" data-type="battery_1_5v">
+                <svg viewBox="0 0 60 40">
+                    <path d="M 0 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 60 20" stroke="#333" stroke-width="2"/>
+                    <path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/>
+                    <text x="12" y="12" font-size="12">+</text>
+                    <text x="42" y="12" font-size="12">-</text>
+                </svg>
+                <span>电源(1.5V)</span>
+            </div>
+            <div class="palette-item" data-type="battery_3v">
+                <svg viewBox="0 0 60 40">
+                    <path d="M 0 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 60 20" stroke="#333" stroke-width="2"/>
+                    <path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/>
+                    <text x="12" y="12" font-size="12">+</text>
+                    <text x="42" y="12" font-size="12">-</text>
+                </svg>
+                <span>电源(3V)</span>
+            </div>
+            <div class="palette-item" data-type="bulb">
+                <svg viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <path d="M 19 19 L 41 41 M 19 41 L 41 19" stroke="#333" stroke-width="2"/>
+                    <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
+                </svg>
+                <span>灯泡</span>
+            </div>
+            <div class="palette-item" data-type="resistor">
+                <svg viewBox="0 0 60 40">
+                    <rect x="15" y="15" width="30" height="10" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <path d="M 5 20 L 15 20 M 45 20 L 55 20" stroke="#333" stroke-width="2"/>
+                    <text x="30" y="12" font-size="10" text-anchor="middle">10Ω</text>
+                </svg>
+                <span>定值电阻</span>
+            </div>
+            <div class="palette-item" data-type="switch">
+                <svg viewBox="0 0 60 40">
+                    <path d="M 5 20 L 20 20 M 40 20 L 55 20" stroke="#333" stroke-width="2"/>
+                    <circle cx="20" cy="20" r="2" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <circle cx="40" cy="20" r="2" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <line x1="20" y1="20" x2="38" y2="10" stroke="#333" stroke-width="2"/>
+                </svg>
+                <span>开关</span>
+            </div>
+            <div class="palette-item" data-type="ammeter">
+                <svg viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text>
+                    <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
+                </svg>
+                <span>电流表</span>
+            </div>
+            <div class="palette-item" data-type="voltmeter">
+                <svg viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
+                    <text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text>
+                    <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
+                </svg>
+                <span>电压表</span>
+            </div>
         </div>
-        <div class="palette-item" data-type="bulb">
-            <svg viewBox="0 0 60 60">
-                <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
-                <path d="M 19 19 L 41 41 M 19 41 L 41 19" stroke="#333" stroke-width="2"/>
-                <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
+        <div id="palette-toggle" class="d-flex align-items-center justify-content-center gap-1">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s ease;">
+                <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
-            <span>灯泡</span>
-        </div>
-        <div class="palette-item" data-type="resistor">
-            <svg viewBox="0 0 60 40">
-                <rect x="15" y="15" width="30" height="10" fill="#fff" stroke="#333" stroke-width="2"/>
-                <path d="M 5 20 L 15 20 M 45 20 L 55 20" stroke="#333" stroke-width="2"/>
-                <text x="30" y="12" font-size="10" text-anchor="middle">10Ω</text>
-            </svg>
-            <span>定值电阻</span>
-        </div>
-        <div class="palette-item" data-type="switch">
-            <svg viewBox="0 0 60 40">
-                <path d="M 5 20 L 20 20 M 40 20 L 55 20" stroke="#333" stroke-width="2"/>
-                <circle cx="20" cy="20" r="2" fill="#fff" stroke="#333" stroke-width="2"/>
-                <circle cx="40" cy="20" r="2" fill="#fff" stroke="#333" stroke-width="2"/>
-                <line x1="20" y1="20" x2="38" y2="10" stroke="#333" stroke-width="2"/>
-            </svg>
-            <span>开关</span>
-        </div>
-        <div class="palette-item" data-type="ammeter">
-            <svg viewBox="0 0 60 60">
-                <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
-                <text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text>
-                <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
-            </svg>
-            <span>电流表</span>
-        </div>
-        <div class="palette-item" data-type="voltmeter">
-            <svg viewBox="0 0 60 60">
-                <circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/>
-                <text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text>
-                <path d="M 5 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>
-            </svg>
-            <span>电压表</span>
+            <span>收起元件库</span>
         </div>
     </div>
 
     <!-- 实验画布 -->
     <div class="canvas-container" id="canvas-container">
         
-        <!-- 课后练习任务浮窗 (支持增删改查选择) -->
+        <!-- 课后练习任务浮窗 -->
         <div id="practice-panel" class="position-absolute top-0 end-0 m-3 p-3 bg-white border rounded shadow-sm d-none" style="z-index: 105; width: 320px;" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
             
-            <!-- 标题栏（始终显示） -->
             <div class="d-flex justify-content-between align-items-center mb-0">
                 <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
@@ -302,30 +342,29 @@
                 </div>
             </div>
             
-            <!-- 可折叠内容区 -->
             <div class="practice-content">
-                <!-- 普通查看模式 -->
                 <div id="practice-view-mode">
                     <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
                         <button class="btn btn-sm btn-outline-primary py-0 d-md-none" style="font-size: 12px;" onclick="startCreatePractice()">创建练习</button>
                     </div>
                     
                     <select class="form-select form-select-sm mb-2" id="practice-select" onchange="loadSelectedPractice()">
-                        <!-- JS 动态填充 -->
                     </select>
                     
-                    <div class="p-2 bg-light border rounded mb-3" style="max-height: 80px; overflow-y: auto;">
+                    <div class="p-2 bg-light border rounded mb-2" style="max-height: 80px; overflow-y: auto;">
                         <p class="small text-muted m-0" id="practice-task-desc">任务目标加载中...</p>
                     </div>
                     
+                    <!-- 步骤引导展示区 -->
+                    <div id="practice-hints-container" class="mb-3 text-start"></div>
+                    
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-success flex-fill fw-bold shadow-sm" id="btn-submit-practice" onclick="verifyPractice()">提交验证</button>
-                        <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-practice" onclick="deleteCurrentPractice()">删除本题</button>
+                        <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-practice" onclick="deleteCurrentPractice()">删除</button>
                     </div>
                     <div id="practice-result" class="mt-2 small font-weight-bold text-center"></div>
                 </div>
 
-                <!-- 创建新练习编辑模式 -->
                 <div id="practice-edit-mode" class="d-none">
                     <div class="d-flex align-items-center mb-2 mt-2">
                         <h6 class="text-primary m-0 fw-bold d-flex align-items-center gap-1">
@@ -334,11 +373,11 @@
                         </h6>
                     </div>
                     <div class="p-2 bg-light border rounded mb-3">
-                        <p class="small text-muted m-0">画布已清空。请在左侧拖拽摆放您想发给学生的**初始元件**。摆放完成后点击下方"确定"进行保存。</p>
+                        <p class="small text-muted m-0">画布已清空。请摆放想发给学生的**初始元件**。完成后点击下方"确定"保存。</p>
                     </div>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-secondary flex-fill shadow-sm" onclick="cancelCreatePractice()">取消并返回</button>
-                        <button class="btn btn-sm btn-primary flex-fill fw-bold shadow-sm" onclick="showSaveTaskModal()">确定并保存</button>
+                        <button class="btn btn-sm btn-secondary flex-fill shadow-sm" onclick="cancelCreatePractice()">取消</button>
+                        <button class="btn btn-sm btn-primary flex-fill fw-bold shadow-sm" onclick="showSaveTaskModal()">确定保存</button>
                     </div>
                 </div>
             </div>
@@ -346,7 +385,7 @@
         </div>
 
         <div class="canvas-wrapper" id="canvas-wrapper">
-            <svg id="circuit-canvas">
+            <svg id="circuit-canvas" xmlns="http://www.w3.org/2000/svg">
                 <!-- 导线层 -->
                 <g id="layer-wires"></g>
                 <!-- 元件层 -->
@@ -363,6 +402,7 @@
                 <line x1="14" y1="11" x2="14" y2="17"></line>
             </svg>
         </div>
+        
     </div>
 
     <!-- 底部控制区 -->
@@ -384,17 +424,39 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <h6>第一步：添加与摆放</h6>
-                    <p class="text-muted small"><strong>长按或拖拽</strong>顶部元件库中的元件，移动至画布松手。<br>拖入右下角<strong>垃圾桶</strong>可将其删除。</p>
+                    <h6>第一步：添加与删除</h6>
+                    <p class="text-muted small"><strong>长按或拖拽</strong>顶部元件库中的元件至画布。<br><strong>长按元件或导线</strong>，将其拖入右下角垃圾桶即可删除。</p>
                     <hr>
-                    <h6>第二步：拖拽连线</h6>
-                    <p class="text-muted small"><strong>按住</strong>元件两端的引脚节点，拖动进行连线。点击已连好的导线可将其删除。</p>
+                    <h6>第二步：连线与开关</h6>
+                    <p class="text-muted small"><strong>按住</strong>引脚节点，拖动进行连线。<br><strong>双击</strong>开关符号可以改变其开合状态。</p>
                     <hr>
-                    <h6>第三步：启动与诊断</h6>
-                    <p class="text-muted small">确保电路闭合后，点击“启动实验”，观察灯泡发光或底部状态栏的故障提示。</p>
+                    <h6>第三步：启动与观察</h6>
+                    <p class="text-muted small">确保电路闭合后，点击“启动实验”，观察灯泡发光及电表读数变化。</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">我知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 故障诊断结果 Modal -->
+    <div class="modal fade" id="faultModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="faultModalTitle">故障诊断</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-danger fw-bold">【现象与原因】</p>
+                    <p id="faultModalDesc" class="text-muted small"></p>
+                    <hr>
+                    <p class="text-success fw-bold">【修改建议】</p>
+                    <p id="faultModalFix" class="text-muted small"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>
@@ -415,10 +477,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">任务要求 / 描述</label>
-                        <textarea class="form-control" id="task-desc-input" rows="3" placeholder="描述学生需要完成的目标，例如：请连接导线点亮所有灯泡..."></textarea>
-                    </div>
-                    <div class="text-muted small">
-                        * 当前画布上的所有元件和连线将会被保存。
+                        <textarea class="form-control" id="task-desc-input" rows="3" placeholder="描述学生需要完成的目标..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -447,8 +506,11 @@
         let conductingWireIds = new Set();
         
         let draggingComp = null;
+        let isHoldingWire = false;
+        let draggingWireId = null;
         let dragOffset = { x: 0, y: 0 };
         let isHoveringTrash = false;
+        let wireTouchStartPt = null;
 
         let tempWire = null; 
         let allPinsCache = [];
@@ -461,11 +523,16 @@
         
         const gridSize = 20;
 
-        // 统一为标准物理原理图符号定义
+        // 元件定义
         const CompDefs = {
-            battery: {
-                width: 60, height: 40, res: 0, type: 'source',
-                svg: `<rect width="60" height="40" fill="transparent"/><path d="M 0 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 60 20" stroke="#333" stroke-width="2"/><path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/><text x="15" y="12" font-size="12">+</text><text x="40" y="12" font-size="12">-</text>`,
+            battery_1_5v: {
+                width: 60, height: 40, res: 0, type: 'source', voltage: 1.5,
+                svg: `<rect width="60" height="40" fill="transparent"/><path d="M 0 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 60 20" stroke="#333" stroke-width="2"/><path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/><text x="12" y="12" font-size="12">+</text><text x="42" y="12" font-size="12">-</text><text class="meter-reading" x="30" y="40" font-size="10" text-anchor="middle" fill="#0d6efd">1.5V</text>`,
+                pins: [{id: 'p1', x: 0, y: 20, type:'positive'}, {id: 'p2', x: 60, y: 20, type:'negative'}]
+            },
+            battery_3v: {
+                width: 60, height: 40, res: 0, type: 'source', voltage: 3.0,
+                svg: `<rect width="60" height="40" fill="transparent"/><path d="M 0 20 L 25 20 M 25 10 L 25 30 M 35 15 L 35 25 M 35 20 L 60 20" stroke="#333" stroke-width="2"/><path d="M 35 15 L 35 25" stroke="#333" stroke-width="4"/><text x="12" y="12" font-size="12">+</text><text x="42" y="12" font-size="12">-</text><text class="meter-reading" x="30" y="40" font-size="10" text-anchor="middle" fill="#0d6efd">3.0V</text>`,
                 pins: [{id: 'p1', x: 0, y: 20, type:'positive'}, {id: 'p2', x: 60, y: 20, type:'negative'}]
             },
             bulb: {
@@ -485,12 +552,12 @@
             },
             ammeter: {
                 width: 60, height: 60, res: 0, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>`,
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="34" font-size="14" font-weight="bold" text-anchor="middle">A</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/><text class="meter-reading" x="30" y="56" font-size="10" text-anchor="middle" fill="#6c757d">0.00A</text>`,
                 pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             },
             voltmeter: {
                 width: 60, height: 60, res: 999999, type: 'meter',
-                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="35" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/>`,
+                svg: `<rect width="60" height="60" fill="transparent"/><circle cx="30" cy="30" r="15" fill="#fff" stroke="#333" stroke-width="2"/><text x="30" y="34" font-size="14" font-weight="bold" text-anchor="middle">V</text><path d="M 0 30 L 15 30 M 45 30 L 55 30" stroke="#333" stroke-width="2"/><text class="meter-reading" x="30" y="56" font-size="10" text-anchor="middle" fill="#6c757d">0.00V</text>`,
                 pins: [{id: 'p1', x: 0, y: 30}, {id: 'p2', x: 60, y: 30}]
             }
         };
@@ -501,8 +568,24 @@
             canvasContainer.style.backgroundSize = `${gridSizeScaled}px ${gridSizeScaled}px`;
             canvasContainer.style.backgroundPosition = `${canvasOffset.x}px ${canvasOffset.y}px`;
         }
+        
 
-        // ================= 练习任务管理 (增删改查) =================
+        // 元件库面板收起/展开
+        let paletteOpen = true;
+        const paletteToggle = document.getElementById('palette-toggle');
+        paletteToggle.addEventListener('click', () => {
+            paletteOpen = !paletteOpen;
+            document.getElementById('palette').style.display = paletteOpen ? 'flex' : 'none';
+            if(paletteOpen) {
+                paletteToggle.classList.add('collapsed');
+                paletteToggle.querySelector('span').textContent = '收起元件库';
+            } else {
+                paletteToggle.classList.remove('collapsed');
+                paletteToggle.querySelector('span').textContent = '展开元件库';
+            }
+        });
+
+        // ================= 练习任务管理 =================
         const STORE_KEY = 'circuit_custom_tasks';
         let allPractices = [];
         let lastSelectedPracticeId = null;
@@ -513,8 +596,14 @@
                     id: 'default_1',
                     name: '基础串联电路',
                     description: '请使用已提供的电源、开关和灯泡，搭建一个基本的闭合串联电路。完成后启动实验并点亮灯泡！',
+                    steps: [
+                        "1. 长按元件的红色引脚并拖动，将电源正极与开关左侧连接。",
+                        "2. 同样的方法，将开关右侧与灯泡一端连接。",
+                        "3. 将灯泡另一端与电源负极（蓝色引脚）连接。",
+                        "4. 点击底部的“启动实验”，然后双击开关将其闭合，观察灯泡。"
+                    ],
                     components: [
-                        { id: 'comp_1', type: 'battery', x: 100, y: 180, isClosed: false },
+                        { id: 'comp_1', type: 'battery_3v', x: 100, y: 180, isClosed: false },
                         { id: 'comp_2', type: 'switch', x: 280, y: 180, isClosed: false },
                         { id: 'comp_3', type: 'bulb', x: 200, y: 110, isClosed: false }
                     ],
@@ -525,8 +614,14 @@
                     id: 'default_2',
                     name: '并联电路挑战',
                     description: '请使用提供的电源、两个灯泡、两个开关。使两个开关分别独立控制两个灯泡（并联关系）。',
+                    steps: [
+                        "1. 将电源正极分别连接到两个开关的一端（形成分流点）。",
+                        "2. 将两个开关的另一端，分别连接到两个灯泡的一端。",
+                        "3. 将两个灯泡的另一端，全部连接回电源的负极（汇合）。",
+                        "4. 启动实验后，分别双击闭合两个开关，验证是否能独立控制灯泡。"
+                    ],
                     components: [
-                        { id: 'comp_1', type: 'battery', x: 80, y: 180, isClosed: false },
+                        { id: 'comp_1', type: 'battery_3v', x: 80, y: 180, isClosed: false },
                         { id: 'comp_2', type: 'bulb', x: 280, y: 170, isClosed: false },
                         { id: 'comp_3', type: 'bulb', x: 280, y: 290, isClosed: false },
                         { id: 'comp_4', type: 'switch', x: 180, y: 180, isClosed: false },
@@ -563,23 +658,30 @@
             document.getElementById('practice-task-desc').innerText = task.description;
             document.getElementById('practice-result').innerText = '';
             
+            let hintsHTML = '';
+            if (task.steps && task.steps.length > 0) {
+                hintsHTML = `
+                <button class="btn btn-sm btn-link p-0 text-decoration-none" onclick="document.getElementById('hints-list').classList.toggle('d-none')">💡 点击查看步骤引导</button>
+                <ul id="hints-list" class="d-none small text-muted mt-1 ps-3 mb-1">
+                    ${task.steps.map(s => `<li>${s}</li>`).join('')}
+                </ul>`;
+            }
+            document.getElementById('practice-hints-container').innerHTML = hintsHTML;
+            
             const delBtn = document.getElementById('btn-delete-practice');
             if(task.isCustom) delBtn.classList.remove('d-none');
             else delBtn.classList.add('d-none');
 
-            // 恢复画布状态
             resetSimulation();
-            components = task.components.map(c => ({
-                id: c.id,
-                type: c.type,
-                x: c.x,
-                y: c.y,
-                def: CompDefs[c.type],
-                isClosed: c.isClosed || false
-            }));
+            components = task.components.map(c => {
+                let cType = c.type;
+                if (cType === 'battery') cType = 'battery_3v'; // 兼容旧版本缓存
+                return {
+                    id: c.id, type: cType, x: c.x, y: c.y, def: CompDefs[cType], isClosed: c.isClosed || false
+                };
+            });
             wires = task.wires.map(w => ({...w}));
             
-            // 重新计算 ID 计数器防止冲突
             let maxId = 0;
             components.forEach(c => {
                 const num = parseInt(c.id.split('_')[1]);
@@ -587,7 +689,6 @@
             });
             compCounter = maxId;
 
-            // 视角归中
             canvasOffset = {x: 0, y: 0};
             canvasScale = 1;
             updateCanvasTransform();
@@ -597,7 +698,6 @@
             setStatus('idle', '目标任务模式：请根据提示连接电路。');
         }
 
-        // ================= 创建新练习流程 =================
         window.startCreatePractice = function() {
             lastSelectedPracticeId = document.getElementById('practice-select').value;
             document.getElementById('practice-view-mode').classList.add('d-none');
@@ -628,12 +728,8 @@
             const savedWires = wires.map(w => ({ id: w.id, p1: w.p1, p2: w.p2 }));
 
             const newTask = {
-                id: 'custom_' + Date.now(),
-                name: name,
-                description: desc || '无详细要求',
-                components: savedComps,
-                wires: savedWires,
-                isCustom: true
+                id: 'custom_' + Date.now(), name: name, description: desc || '无详细要求', steps: [],
+                components: savedComps, wires: savedWires, isCustom: true
             };
 
             let customs = [];
@@ -687,7 +783,6 @@
             return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
-        // 通用的提交验证逻辑
         window.verifyPractice = function() {
             const resultDiv = document.getElementById('practice-result');
             
@@ -708,39 +803,37 @@
                     const compGroup = document.querySelector(`g[data-id="${b.id}"]`);
                     if(compGroup) {
                         const glass = compGroup.querySelector('.bulb-glass');
-                        if(!glass || !glass.classList.contains('active')) {
-                            allLit = false;
-                        }
+                        if(!glass || !glass.classList.contains('active')) allLit = false;
                     }
                 });
 
-                if(allLit) {
-                    resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！电路连通正确，灯泡已全部点亮！</span>';
-                } else {
-                    resultDiv.innerHTML = '<span class="text-danger">任务失败：部分灯泡未能发光，请检查支路连线。</span>';
-                }
+                if(allLit) resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！电路连通正确，灯泡已全部点亮！</span>';
+                else resultDiv.innerHTML = '<span class="text-danger">任务失败：部分灯泡未能发光，请检查支路连线。</span>';
             } else {
                 resultDiv.innerHTML = '<span class="text-success">🎉 恭喜！任务验证通过！电路无异常。</span>';
             }
         };
 
+        // 事件侦听器
         document.addEventListener('DOMContentLoaded', () => {
             initPractices();
 
             document.getElementById('scene-select').addEventListener('change', (e) => {
                 const val = e.target.value;
                 const practicePanel = document.getElementById('practice-panel');
+                const faultPanel = document.getElementById('fault-panel');
+                const modeSelect = document.getElementById('mode-select');
                 
                 document.getElementById('practice-edit-mode').classList.add('d-none');
                 document.getElementById('practice-view-mode').classList.remove('d-none');
 
                 if(val === 'practice') {
                     practicePanel.classList.remove('d-none');
-                    if(isMobileDevice()) {
-                        practicePanel.classList.add('collapsed');
-                    } else {
-                        practicePanel.classList.remove('collapsed');
-                    }
+                    if(isMobileDevice()) practicePanel.classList.add('collapsed');
+                    else practicePanel.classList.remove('collapsed');
+                    modeSelect.value = 'basic';
+                    faultPanel.classList.add('d-none');
+                    document.getElementById('fault-type').value = 'none';
                     initPractices(); 
                     loadSelectedPractice(); 
                 } else {
@@ -754,6 +847,8 @@
                 const faultPanel = document.getElementById('fault-panel');
                 if(e.target.value === 'fault') {
                     faultPanel.classList.remove('d-none');
+                    document.getElementById('scene-select').value = 'class'; // switch to class mode automatically
+                    document.getElementById('practice-panel').classList.add('d-none');
                 } else {
                     faultPanel.classList.add('d-none');
                     document.getElementById('fault-type').value = 'none';
@@ -761,10 +856,15 @@
                 resetSimulation();
             });
 
-            document.getElementById('btn-trigger-fault').addEventListener('click', () => {
-                if(!isSimulating) toggleSimulation();
-                else updateSimulation();
+            document.getElementById('fault-type').addEventListener('change', (e) => {
+                if (e.target.value !== 'none') {
+                    loadPresetFault(e.target.value);
+                } else {
+                    resetCanvas(true);
+                }
             });
+
+            document.getElementById('btn-trigger-fault').addEventListener('click', triggerFaultDiagnosis);
 
             canvasContainer.addEventListener('wheel', (e) => {
                 if(isSimulating) return;
@@ -795,10 +895,13 @@
 
             document.addEventListener('mousemove', (e) => {
                 if(isDraggingCanvas) {
-                    e.preventDefault();
-                    canvasOffset.x = canvasDragStartOffset.x + (e.clientX - canvasDragStart.x);
-                    canvasOffset.y = canvasDragStartOffset.y + (e.clientY - canvasDragStart.y);
-                    updateCanvasTransform();
+                    const dist = Math.hypot(e.clientX - canvasDragStart.x, e.clientY - canvasDragStart.y);
+                    if (dist > 10) { // 【修复】防抖阈值 10px，防止点击时的微小挪动干扰
+                        e.preventDefault();
+                        canvasOffset.x = canvasDragStartOffset.x + (e.clientX - canvasDragStart.x);
+                        canvasOffset.y = canvasDragStartOffset.y + (e.clientY - canvasDragStart.y);
+                        updateCanvasTransform();
+                    }
                 }
             });
 
@@ -832,14 +935,11 @@
                     touchStartScale = canvasScale;
                     touchStartOffset = { ...canvasOffset };
                     lastTouchCenter = { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2 };
-                } else if(e.touches.length === 1 && !draggingComp && !tempWire) {
-                    const rect = canvasContainer.getBoundingClientRect();
+                } else if(e.touches.length === 1 && !draggingComp && !tempWire && !isHoldingWire) {
+                    isDraggingCanvas = true;
                     const touch = e.touches[0];
-                    if(touch.clientX - rect.left < 50 && touch.clientY - rect.top < 50) {
-                        isDraggingCanvas = true;
-                        canvasDragStart = { x: touch.clientX, y: touch.clientY };
-                        canvasDragStartOffset = { ...canvasOffset };
-                    }
+                    canvasDragStart = { x: touch.clientX, y: touch.clientY };
+                    canvasDragStartOffset = { ...canvasOffset };
                 }
             }, {passive: false});
 
@@ -858,11 +958,14 @@
                     canvasOffset.y = center.y - rect.top - worldY * canvasScale;
                     updateCanvasTransform();
                 } else if(isDraggingCanvas && e.touches.length === 1) {
-                    e.preventDefault();
                     const touch = e.touches[0];
-                    canvasOffset.x = canvasDragStartOffset.x + (touch.clientX - canvasDragStart.x);
-                    canvasOffset.y = canvasDragStartOffset.y + (touch.clientY - canvasDragStart.y);
-                    updateCanvasTransform();
+                    const dist = Math.hypot(touch.clientX - canvasDragStart.x, touch.clientY - canvasDragStart.y);
+                    if (dist > 10) { // 【修复】防抖阈值 10px，手指微抖不再立刻打断长按识别
+                        e.preventDefault();
+                        canvasOffset.x = canvasDragStartOffset.x + (touch.clientX - canvasDragStart.x);
+                        canvasOffset.y = canvasDragStartOffset.y + (touch.clientY - canvasDragStart.y);
+                        updateCanvasTransform();
+                    }
                 }
             }, {passive: false});
 
@@ -880,6 +983,110 @@
         });
 
         function showGuide() { new bootstrap.Modal(document.getElementById('guideModal')).show(); }
+
+        // 载入故障预设电路
+        function loadPresetFault(type) {
+            resetCanvas(true);
+            isSimulating = false;
+            document.getElementById('btn-simulate').innerText = "启动实验";
+            document.getElementById('btn-simulate').classList.replace('btn-warning', 'btn-primary');
+            
+            if(type === 'power_short') {
+                components = [
+                    { id: 'comp_1', type: 'battery_3v', x: 120, y: 120, def: CompDefs.battery_3v, isClosed: false },
+                    { id: 'comp_2', type: 'switch', x: 280, y: 180, def: CompDefs.switch, isClosed: true }
+                ];
+                wires = [
+                    { id: 'w_1', p1: 'comp_1_p1', p2: 'comp_2_p1' },
+                    { id: 'w_2', p1: 'comp_1_p2', p2: 'comp_2_p2' }
+                ];
+                compCounter = 2;
+            } else if(type === 'appliance_short') {
+                components = [
+                    { id: 'comp_1', type: 'battery_3v', x: 100, y: 160, def: CompDefs.battery_3v, isClosed: false },
+                    { id: 'comp_2', type: 'switch', x: 280, y: 120, def: CompDefs.switch, isClosed: true },
+                    { id: 'comp_3', type: 'bulb', x: 200, y: 230, def: CompDefs.bulb, isClosed: false }
+                ];
+                wires = [
+                    { id: 'w_1', p1: 'comp_1_p1', p2: 'comp_2_p1' },
+                    { id: 'w_2', p1: 'comp_2_p2', p2: 'comp_3_p2' },
+                    { id: 'w_3', p1: 'comp_3_p1', p2: 'comp_1_p2' },
+                    { id: 'w_4', p1: 'comp_3_p1', p2: 'comp_3_p2' }
+                ];
+                compCounter = 3;
+            } else if(type === 'wire_break') {
+                components = [
+                    { id: 'comp_1', type: 'battery_3v', x: 100, y: 160, def: CompDefs.battery_3v, isClosed: false },
+                    { id: 'comp_2', type: 'switch', x: 280, y: 120, def: CompDefs.switch, isClosed: true },
+                    { id: 'comp_3', type: 'bulb', x: 200, y: 230, def: CompDefs.bulb, isClosed: false }
+                ];
+                wires = [
+                    { id: 'w_1', p1: 'comp_1_p1', p2: 'comp_2_p1' },
+                    { id: 'w_3', p1: 'comp_3_p1', p2: 'comp_1_p2' }
+                ];
+                compCounter = 3;
+            } else if(type === 'range_error') {
+                components = [
+                    { id: 'comp_1', type: 'battery_3v', x: 100, y: 160, def: CompDefs.battery_3v, isClosed: false },
+                    { id: 'comp_2', type: 'switch', x: 280, y: 120, def: CompDefs.switch, isClosed: true },
+                    { id: 'comp_3', type: 'ammeter', x: 200, y: 230, def: CompDefs.ammeter, isClosed: false }
+                ];
+                wires = [
+                    { id: 'w_1', p1: 'comp_1_p1', p2: 'comp_2_p1' },
+                    { id: 'w_2', p1: 'comp_2_p2', p2: 'comp_3_p2' },
+                    { id: 'w_3', p1: 'comp_3_p1', p2: 'comp_1_p2' }
+                ];
+                compCounter = 3;
+            }
+            canvasOffset = {x: 40, y: 40}; // Center it slightly
+            updateCanvasTransform();
+            renderComponents();
+            renderWires();
+            setStatus('idle', '已载入故障电路。点击右上角【触发】查看原因。');
+        }
+
+        function triggerFaultDiagnosis() {
+            const type = document.getElementById('fault-type').value;
+            if(type === 'none') {
+                toggleSimulation();
+                return;
+            }
+            
+            isSimulating = true;
+            document.getElementById('btn-simulate').innerText = "停止实验";
+            document.getElementById('btn-simulate').classList.replace('btn-primary', 'btn-warning');
+            
+            let title = "", desc = "", fix = "";
+            switch(type) {
+                case 'power_short':
+                    title = "💥 电源短路";
+                    desc = "电流未经过任何用电器，直接从电源正极流回了负极。这会产生极大的电流，瞬间烧毁电源和导线！";
+                    fix = "确保电路中至少串联一个用电器（如灯泡或定值电阻）。请断开开关，长按并拖动直接连接电源两极的导线到垃圾桶，然后接入用电器。";
+                    break;
+                case 'appliance_short':
+                    title = "⚠️ 用电器短路";
+                    desc = "有一根导线直接并联在了灯泡两端。由于导线电阻几乎为零，电流会“走捷径”全部通过导线，导致灯泡不亮，同时这也是一种短路行为。";
+                    fix = "找出并拆除与用电器两端直接相连的“捷径”导线。长按该导线拖入垃圾桶即可。";
+                    break;
+                case 'wire_break':
+                    title = "🔌 导线断路";
+                    desc = "电路存在断开的地方（如缺失导线或接触不良），电流无法形成闭合回路，因此用电器无法工作。";
+                    fix = "仔细检查各元件之间的连接，拖拽引脚补充缺失的导线，确保电路是一个首尾相连完整的环。";
+                    break;
+                case 'range_error':
+                    title = "⚡ 电表使用错误 (量程或连法)";
+                    desc = "图中将内阻极小的电流表直接接在了电源两端（没有串联其他用电器），或者将电压表错误地串联在了干路中。";
+                    fix = "电流表必须与被测用电器【串联】，电压表必须与被测用电器【并联】。并且预估读数不能超过仪表的最大量程。";
+                    break;
+            }
+            
+            document.getElementById('faultModalTitle').innerText = title;
+            document.getElementById('faultModalDesc').innerText = desc;
+            document.getElementById('faultModalFix').innerText = fix;
+            new bootstrap.Modal(document.getElementById('faultModal')).show();
+            
+            updateSimulation();
+        }
 
         function initPaletteDrag() {
             const paletteItems = document.querySelectorAll('.palette-item');
@@ -956,7 +1163,7 @@
                     let touchStartTime = 0;
                     g.addEventListener('touchstart', () => touchStartTime = Date.now());
                     g.addEventListener('touchend', (e) => {
-                        if(Date.now() - touchStartTime < 200 && !draggingComp) toggleSwitch(comp.id, e);
+                        if(Date.now() - touchStartTime < 250 && !draggingComp) toggleSwitch(comp.id, e);
                     });
                 }
 
@@ -1017,17 +1224,6 @@
             let maxX = Math.max(gridStart.x, gridEnd.x) + 10;
             let minY = Math.min(gridStart.y, gridEnd.y) - 10;
             let maxY = Math.max(gridStart.y, gridEnd.y) + 10;
-
-            components.forEach(c => {
-                let gx = Math.floor(c.x / gridSize);
-                let gy = Math.floor(c.y / gridSize);
-                let gw = Math.ceil(c.def.width / gridSize);
-                let gh = Math.ceil(c.def.height / gridSize);
-                minX = Math.min(minX, gx - 2);
-                maxX = Math.max(maxX, gx + gw + 2);
-                minY = Math.min(minY, gy - 2);
-                maxY = Math.max(maxY, gy + gh + 2);
-            });
 
             const isObstacle = (x, y) => {
                 return components.some(c => {
@@ -1142,6 +1338,8 @@
                 const pathData = getPathData(wire.p1, c1, wire.p2, c2);
 
                 const wireGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                // 【修复】注入可脱胶视觉位移用的特殊类名
+                wireGroup.setAttribute('class', `wire-group-${wire.id}`);
                 
                 const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 clickArea.setAttribute('d', pathData);
@@ -1151,16 +1349,51 @@
                 path.setAttribute('d', pathData);
                 path.setAttribute('class', 'wire');
                 
-                const removeWire = (e) => {
-                    e.stopPropagation();
+                let wireHoldTimer = null;
+                let holdingThisWire = false;
+
+                const startWireHold = (e) => {
                     if(isSimulating) return;
-                    wires = wires.filter(w => w.id !== wire.id);
-                    renderWires();
+                    holdingThisWire = false;
+                    wireTouchStartPt = getEventPoint(e);
+                    wireHoldTimer = setTimeout(() => {
+                        holdingThisWire = true;
+                        isHoldingWire = true;
+                        isDraggingCanvas = false; // 【关键修复】立刻切断画布底图的平移权
+                        draggingWireId = wire.id;
+                        trashCan.classList.add('visible');
+                        path.style.stroke = '#dc3545';
+                        path.style.strokeDasharray = '5,5';
+                        path.style.strokeWidth = '4'; // 变粗产生物理抓起感
+                        if (navigator.vibrate) navigator.vibrate(50);
+                    }, 300);
                 };
-                clickArea.addEventListener('click', removeWire);
-                clickArea.addEventListener('touchstart', removeWire);
-                path.addEventListener('click', removeWire);
-                path.addEventListener('touchstart', removeWire);
+
+                const cancelWireHold = () => {
+                    if(wireHoldTimer) clearTimeout(wireHoldTimer);
+                    wireHoldTimer = null;
+                    holdingThisWire = false;
+                };
+
+                const handleWireMove = (e) => {
+                    if(!holdingThisWire && wireHoldTimer && wireTouchStartPt) {
+                        const pt = getEventPoint(e);
+                        const dist = Math.hypot(pt.x - wireTouchStartPt.x, pt.y - wireTouchStartPt.y);
+                        if(dist > 10) { // 【修复】防抖容差，允许指尖极轻微抖动而不取消长按
+                            clearTimeout(wireHoldTimer);
+                            wireHoldTimer = null;
+                        }
+                    }
+                };
+
+                clickArea.addEventListener('mousedown', startWireHold);
+                clickArea.addEventListener('touchstart', startWireHold, {passive: true});
+                
+                clickArea.addEventListener('mouseup', cancelWireHold);
+                clickArea.addEventListener('touchend', cancelWireHold);
+                
+                clickArea.addEventListener('touchmove', handleWireMove, {passive: true});
+                clickArea.addEventListener('mousemove', handleWireMove);
                 
                 wireGroup.appendChild(clickArea);
                 wireGroup.appendChild(path);
@@ -1235,8 +1468,31 @@
         }
 
         function handleDragMove(e) {
+            if (isHoldingWire) {
+                e.preventDefault();
+                const pt = getEventPoint(e);
+                const trashRect = trashCan.getBoundingClientRect();
+                if (pt.x > trashRect.left && pt.x < trashRect.right && pt.y > trashRect.top && pt.y < trashRect.bottom) {
+                    trashCan.classList.add('active'); isHoveringTrash = true;
+                } else {
+                    trashCan.classList.remove('active'); isHoveringTrash = false;
+                }
+                
+                // 【关键修复】直观的视觉反馈：让导线跟着指尖移动，用户确信自己正在拖动
+                if (wireTouchStartPt) {
+                    const world = screenToWorld(pt.x, pt.y);
+                    const worldStart = screenToWorld(wireTouchStartPt.x, wireTouchStartPt.y);
+                    const dx = world.x - worldStart.x;
+                    const dy = world.y - worldStart.y;
+                    const wg = document.querySelector(`.wire-group-${draggingWireId}`);
+                    if (wg) wg.setAttribute('transform', `translate(${dx}, ${dy})`);
+                }
+                return;
+            }
+
             if (!tempWire && !draggingComp) return;
             e.preventDefault();
+            
             if (tempWire) {
                 const pt = getEventPoint(e);
                 const world = screenToWorld(pt.x, pt.y);
@@ -1288,6 +1544,18 @@
         }
 
         function handleDragEnd(e) {
+            if (isHoldingWire) {
+                if (isHoveringTrash) {
+                    wires = wires.filter(w => w.id !== draggingWireId);
+                }
+                isHoldingWire = false;
+                draggingWireId = null;
+                isHoveringTrash = false;
+                trashCan.classList.remove('visible', 'active');
+                renderWires();
+                return;
+            }
+
             if (tempWire) {
                 allPinsCache.forEach(p => { if(p.element) p.element.classList.remove('active'); });
                 if (tempWire.snapPin) {
@@ -1330,6 +1598,18 @@
             document.getElementById('btn-simulate').classList.replace('btn-warning', 'btn-primary');
             setStatus('idle', document.getElementById('scene-select').value === 'practice' ? '目标任务模式：请根据提示连接电路。' : '等待操作 (未连接电源)');
             document.querySelectorAll('.bulb-glass, .bulb-cross').forEach(el => el.classList.remove('active'));
+            // Reset meter readings text
+            components.forEach(c => {
+                const compGroup = document.querySelector(`g[data-id="${c.id}"]`);
+                if(compGroup) {
+                    const meterText = compGroup.querySelector('.meter-reading');
+                    if(meterText) {
+                        if(c.type === 'ammeter') { meterText.textContent = '0.00A'; meterText.setAttribute('fill', '#6c757d'); }
+                        else if(c.type === 'voltmeter') { meterText.textContent = '0.00V'; meterText.setAttribute('fill', '#6c757d'); }
+                        else if(c.type.startsWith('battery')) { meterText.textContent = c.def.voltage.toFixed(1) + 'V'; }
+                    }
+                }
+            });
             renderWires();
         }
 
@@ -1358,7 +1638,7 @@
             };
 
             components.forEach(c => {
-                if(c.type === 'battery') return;
+                if(c.type.startsWith('battery')) return;
                 const p1 = `${c.id}_p1`, p2 = `${c.id}_p2`;
                 let res = c.def.res;
                 if(c.type === 'switch') res = (opts.forceSwitchesClosed || c.isClosed) ? 0 : 999999;
@@ -1371,7 +1651,7 @@
             effectiveWires.forEach(w => addEdge(w.p1, w.p2, 0, null));
 
             if(opts.powerShort) {
-                const battery = components.find(c => c.type === 'battery');
+                const battery = components.find(c => c.type.startsWith('battery'));
                 if(battery) addEdge(`${battery.id}_p1`, `${battery.id}_p2`, 0, null);
             }
             return { graph, addEdge };
@@ -1400,29 +1680,26 @@
             return { dist, prev };
         }
 
-        // ================= 核心修复逻辑：拓扑去死胡同算法 =================
         function findAllConductingComps(graph, startPin, endPin) {
             let workingGraph = {};
             let degrees = {};
             let validEdges = [];
 
-            // 1. 初始化度数，并剥离断开的元件（电阻无穷大）
             for(let node in graph) degrees[node] = 0;
 
             for (let u in graph) {
                 workingGraph[u] = [];
                 for (let edge of graph[u]) {
-                    if (edge.res < 999999) { // 只看通路
+                    if (edge.res < 999999) {
                         workingGraph[u].push({...edge});
                         degrees[u]++;
-                        if (u < edge.to) { // 避免双向边重复计算
+                        if (u < edge.to) {
                             validEdges.push({u: u, v: edge.to, comp: edge.comp});
                         }
                     }
                 }
             }
 
-            // 2. 找出所有度为1的节点（死胡同尽头），排除电源节点
             let queue = [];
             for (let node in degrees) {
                 if (degrees[node] === 1 && node !== startPin && node !== endPin) {
@@ -1432,19 +1709,16 @@
 
             let removedNodes = new Set();
             
-            // 3. 剥洋葱式剪枝：不断去掉死胡同，直到只剩下完整回路
             while (queue.length > 0) {
                 let u = queue.shift();
                 if (removedNodes.has(u)) continue;
                 removedNodes.add(u);
                 degrees[u] = 0;
 
-                // 找到与它相连的那个节点，度数减1
                 for (let edge of workingGraph[u]) {
                     let v = edge.to;
                     if (!removedNodes.has(v)) {
                         degrees[v]--;
-                        // 如果那个节点也变成了新的死胡同尽头，加进队列继续剪
                         if (degrees[v] === 1 && v !== startPin && v !== endPin) {
                             queue.push(v);
                         }
@@ -1452,7 +1726,6 @@
                 }
             }
 
-            // 4. 在剪裁干净的“骨架”上，从电源正极出发进行遍历，能摸到的才是通电的
             let reachable = new Set();
             let bfsQueue = [startPin];
             reachable.add(startPin);
@@ -1470,13 +1743,11 @@
                 }
             }
 
-            // 5. 组装结果
             let conductingComps = new Set();
             let conductingEdges = new Set();
             let hasLoad = false;
 
             for (let e of validEdges) {
-                // 如果这条边两端都没被剪掉，且都能被电源摸到
                 if (!removedNodes.has(e.u) && !removedNodes.has(e.v) && reachable.has(e.u) && reachable.has(e.v)) {
                     conductingEdges.add(e.u + '|' + e.v);
                     conductingEdges.add(e.v + '|' + e.u);
@@ -1489,141 +1760,18 @@
                 }
             }
 
-            // 算出总电阻供其他逻辑使用
             let { dist } = dijkstra(graph, startPin, endPin);
-
             return { comps: conductingComps, wireEdges: conductingEdges, totalRes: dist[endPin], hasLoad };
-        }
-        // =================================================================
-
-        function getZeroResCluster(graph, startPin, ignoreCompId) {
-            let cluster = new Set();
-            let queue = [startPin];
-            cluster.add(startPin);
-            while(queue.length > 0) {
-                let u = queue.shift();
-                if(!graph[u]) continue;
-                for(let edge of graph[u]) {
-                    if(edge.comp && edge.comp.id === ignoreCompId) continue; 
-                    if(edge.res === 0 && !cluster.has(edge.to)) {
-                        cluster.add(edge.to);
-                        queue.push(edge.to);
-                    }
-                }
-            }
-            return cluster;
-        }
-
-        function checkRangeError(battery, totalRes, dist) {
-            if(!battery || totalRes <= 0 || totalRes >= 999999) return [];
-            const voltage = 1.5, current = voltage / totalRes;
-            let faults = [];
-            components.forEach(c => {
-                if(c.type === 'ammeter') {
-                    if(current > 0.6) faults.push(`电流表(${c.id})量程过小(电流${current.toFixed(2)}A > 0.6A量程)，可能烧毁`);
-                    else if(current < 0.02) faults.push(`电流表(${c.id})偏转过小(电流${current.toFixed(3)}A)，应换小量程`);
-                }
-                if(c.type === 'voltmeter') {
-                    let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-                    let d1 = dist[cp1] !== undefined ? dist[cp1] : Infinity;
-                    let d2 = dist[cp2] !== undefined ? dist[cp2] : Infinity;
-                    let measuredV = 0;
-                    if(d1 !== Infinity && d2 !== Infinity) {
-                        measuredV = current * Math.abs(d1 - d2);
-                    }
-                    if(measuredV > 3) faults.push(`电压表(${c.id})量程过小(测得电压${measuredV.toFixed(2)}V > 3V量程)，可能烧毁`);
-                    else if(measuredV > 0 && measuredV < 0.1) faults.push(`电压表(${c.id})偏转过小(测得电压${measuredV.toFixed(2)}V)，应换小量程`);
-                }
-            });
-            return faults;
-        }
-
-        function autoDetectFaults(battery) {
-            let allFaults = [];
-            const batP1 = `${battery.id}_p1`, batP2 = `${battery.id}_p2`;
-            let { graph } = buildGraph({}), { dist } = dijkstra(graph, batP1, batP2);
-            let totalRes = dist[batP2];
-
-            if(totalRes === 0) {
-                let allResult = findAllConductingComps(graph, batP1, batP2);
-                allFaults.push(allResult.hasLoad ? '⚠️ 用电器被短路！有导线直接绕过了用电器。' : '⚠️ 电源短路！电池正负极之间无用电器，会烧毁电源。');
-            }
-
-            if(totalRes >= 999999) {
-                let openSwitches = components.filter(c => c.type === 'switch' && !c.isClosed);
-                if(openSwitches.length > 0) allFaults.push('断路: 开关未闭合。');
-
-                let { graph: closedGraph } = buildGraph({});
-                components.forEach(c => {
-                    if(c.type === 'switch' && !c.isClosed) {
-                        const p1 = `${c.id}_p1`, p2 = `${c.id}_p2`;
-                        if(!closedGraph[p1]) closedGraph[p1] = []; if(!closedGraph[p2]) closedGraph[p2] = [];
-                        closedGraph[p1].push({to: p2, res: 0, comp: c}); closedGraph[p2].push({to: p1, res: 0, comp: c});
-                    }
-                });
-                if(dijkstra(closedGraph, batP1, batP2).dist[batP2] >= 999999) allFaults.push('断路: 即使闭合所有开关，电路仍不连通，请检查导线。');
-            }
-
-            if(totalRes > 0 && totalRes < 999999) allFaults = allFaults.concat(checkRangeError(battery, totalRes, dist));
-
-            components.forEach(c => {
-                if(c.type === 'ammeter') {
-                    const cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-                    let cluster1 = getZeroResCluster(graph, cp1, c.id);
-                    let cluster2 = getZeroResCluster(graph, cp2, c.id);
-
-                    if (!cluster1.has(cp2)) {
-                        components.forEach(mc => {
-                            if(mc.type === 'bulb' || mc.type === 'resistor') {
-                                let mp1 = `${mc.id}_p1`, mp2 = `${mc.id}_p2`;
-                                if ((cluster1.has(mp1) && cluster2.has(mp2)) || (cluster1.has(mp2) && cluster2.has(mp1))) {
-                                    allFaults.push(`电流表(${c.id})并联在了${mc.type === 'bulb' ? '灯泡' : '定值电阻'}(${mc.id})两端，应串联使用。`);
-                                }
-                            }
-                        });
-                    }
-                }
-                if(c.type === 'voltmeter') {
-                    let { graph: fullGraph } = buildGraph({ forceSwitchesClosed: true });
-                    let distWith = dijkstra(fullGraph, batP1, batP2).dist[batP2];
-                    distWith = distWith !== undefined ? distWith : Infinity;
-                    
-                    let { graph: testGraph } = buildGraph({ forceSwitchesClosed: true });
-                    
-                    if (testGraph[`${c.id}_p1`]) {
-                        testGraph[`${c.id}_p1`] = testGraph[`${c.id}_p1`].filter(e => e.comp !== c);
-                    }
-                    if (testGraph[`${c.id}_p2`]) {
-                        testGraph[`${c.id}_p2`] = testGraph[`${c.id}_p2`].filter(e => e.comp !== c);
-                    }
-                    
-                    let distWithout = dijkstra(testGraph, batP1, batP2).dist[batP2];
-                    distWithout = distWithout !== undefined ? distWithout : Infinity;
-                    
-                    if(distWith < Infinity && distWithout >= 999999) {
-                        allFaults.push(`电压表(${c.id})串联在了电路中，应并联使用。`);
-                    }
-                }
-            });
-            return allFaults;
         }
 
         function updateSimulation() {
-            const faultSelect = document.getElementById('fault-type').value;
-            const isFaultMode = document.getElementById('mode-select').value === 'fault';
-            const battery = components.find(c => c.type === 'battery');
+            const battery = components.find(c => c.type.startsWith('battery'));
             if(!battery) return setStatus('error', '未检测到电源，电路断路。');
+            const batVoltage = battery.def.voltage;
 
             const batP1 = `${battery.id}_p1`, batP2 = `${battery.id}_p2`;
             
-            let opts = {};
-            if(isFaultMode && faultSelect !== 'none') {
-                if(faultSelect === 'power_short') opts.powerShort = true;
-                if(faultSelect === 'appliance_short') opts.applianceShort = true;
-                if(faultSelect === 'wire_break' && wires.length > 0) opts.breakWireIndex = Math.floor(Math.random() * wires.length);
-            }
-
-            let { graph } = buildGraph(opts);
+            let { graph } = buildGraph({});
             if(!graph[batP1]) graph[batP1] = []; if(!graph[batP2]) graph[batP2] = [];
             let { dist } = dijkstra(graph, batP1, batP2);
             let totalRes = dist[batP2];
@@ -1631,61 +1779,86 @@
             document.querySelectorAll('.bulb-glass, .bulb-cross').forEach(el => el.classList.remove('active'));
             conductingWireIds = new Set();
 
-            if(isFaultMode && faultSelect !== 'none') {
-                if(faultSelect === 'range_error') {
-                    let { graph: normalGraph } = buildGraph({}), { dist: normalDist } = dijkstra(normalGraph, batP1, batP2);
-                    let normalRes = normalDist[batP2];
-                    if(normalRes > 0 && normalRes < 999999) {
-                        lightBulbsAll(normalGraph, batP1, batP2); conductingWireIds = findConductingWiresAll(normalGraph, batP1, batP2); renderWires();
-                        let voltage = 1.5, current = voltage / normalRes, msgs = [];
-                        components.forEach(c => {
-                            if(c.type === 'ammeter') msgs.push(`电流表(${c.id}): 电流${current.toFixed(3)}A，${current > 0.6 ? '超量程' : current < 0.02 ? '偏转太小' : '正常'}`);
-                            if(c.type === 'voltmeter') {
-                                let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-                                let d1 = normalDist[cp1] !== undefined ? normalDist[cp1] : Infinity;
-                                let d2 = normalDist[cp2] !== undefined ? normalDist[cp2] : Infinity;
-                                let measuredV = (d1 !== Infinity && d2 !== Infinity) ? current * Math.abs(d1 - d2) : 0;
-                                msgs.push(`电压表(${c.id}): 测得电压约${measuredV.toFixed(1)}V，若量程3V则${measuredV > 3 ? '超量程' : '正常'}`);
-                            }
-                        });
-                        if(msgs.length === 0) return setStatus('error', '⚠️ 电路中没有电表，无法模拟量程故障。');
-                        return setStatus('error', '⚠️ 量程分析:\n' + msgs.join('\n'));
-                    }
-                    return setStatus('error', '⚠️ 电路未导通，无法分析量程。');
-                }
-                if(faultSelect === 'wire_break') {
-                    if(totalRes >= 999999) { renderWires(); return setStatus('error', '⚠️ 故障: 导线断路！电路中有一根导线断开，电路不通。'); }
-                    else {
-                        lightBulbsAll(graph, batP1, batP2); conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires();
-                        return setStatus('error', '⚠️ 故障: 导线断路！断开的导线未影响主回路，但部分支路可能失效。');
-                    }
-                }
-                if(totalRes >= 999999) { renderWires(); return setStatus('idle', '状态: 断路 (开关未闭合或线路未连通)'); }
-                else if(totalRes === 0) {
-                    let allResult = findAllConductingComps(graph, batP1, batP2);
-                    if(!allResult.hasLoad) { renderWires(); return setStatus('error', '⚠️ 警告: 电源短路！请立即断开开关。'); }
-                    else { conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires(); return setStatus('error', '⚠️ 用电器被短路！有导线直接绕过了用电器。灯泡不亮。'); }
-                } else {
-                    lightBulbsAll(graph, batP1, batP2); conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires();
-                    return setStatus('success', '状态: 导通。实验正常进行。');
-                }
+            // Readings update logic
+            let I_global = 0;
+            if (totalRes > 0 && totalRes < 999999) {
+                I_global = batVoltage / totalRes;
+            } else if (totalRes === 0) {
+                I_global = Infinity;
             }
 
-            if(isFaultMode && faultSelect === 'none') {
-                let detectedFaults = autoDetectFaults(battery);
-                if(detectedFaults.length > 0) {
-                    if(totalRes > 0 && totalRes < 999999) { lightBulbsAll(graph, batP1, batP2); conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires(); }
-                    return setStatus('error', '🔍 自动识别:\n' + detectedFaults.join('\n'));
-                }
+            let conductingComps = new Set();
+            if(totalRes < 999999) {
+                const res = findAllConductingComps(graph, batP1, batP2);
+                conductingComps = res.comps;
+                conductingWireIds = findConductingWiresAll(graph, batP1, batP2);
             }
 
-            if(totalRes >= 999999) { renderWires(); setStatus('idle', '状态: 断路 (开关未闭合或线路未连通)'); }
+            components.forEach(c => {
+                const compGroup = document.querySelector(`g[data-id="${c.id}"]`);
+                if(!compGroup) return;
+                const meterText = compGroup.querySelector('.meter-reading');
+                if(!meterText) return;
+
+                if (c.type === 'ammeter') {
+                    if (totalRes >= 999999 || !conductingComps.has(c)) {
+                        meterText.textContent = '0.00A';
+                        meterText.setAttribute('fill', '#6c757d');
+                    } else if (totalRes === 0) {
+                        meterText.textContent = 'ERR';
+                        meterText.setAttribute('fill', '#dc3545');
+                    } else {
+                        meterText.textContent = (I_global > 9.99 ? '>9.9A' : I_global.toFixed(2) + 'A');
+                        meterText.setAttribute('fill', '#0d6efd');
+                    }
+                } else if (c.type === 'voltmeter') {
+                    let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
+                    let d1 = dist[cp1] !== undefined ? dist[cp1] : Infinity;
+                    let d2 = dist[cp2] !== undefined ? dist[cp2] : Infinity;
+                    
+                    if (totalRes >= 999999) {
+                        let { graph: fullGraph } = buildGraph({ forceSwitchesClosed: false });
+                        let batDistP1 = dijkstra(fullGraph, batP1, cp1).dist[cp1];
+                        let batDistP2 = dijkstra(fullGraph, batP2, cp2).dist[cp2];
+                        let batDistP1_alt = dijkstra(fullGraph, batP1, cp2).dist[cp2];
+                        let batDistP2_alt = dijkstra(fullGraph, batP2, cp1).dist[cp1];
+
+                        if ((batDistP1 < 999999 && batDistP2 < 999999) || (batDistP1_alt < 999999 && batDistP2_alt < 999999)) {
+                            meterText.textContent = batVoltage.toFixed(2) + 'V'; 
+                            meterText.setAttribute('fill', '#0d6efd');
+                        } else {
+                            meterText.textContent = '0.00V';
+                            meterText.setAttribute('fill', '#6c757d');
+                        }
+                    } else {
+                        let v1 = batVoltage * (1 - (d1 / totalRes));
+                        let v2 = batVoltage * (1 - (d2 / totalRes));
+                        let vDiff = Math.abs(v1 - v2);
+                        if(isNaN(vDiff)) vDiff = 0;
+                        meterText.textContent = vDiff.toFixed(2) + 'V';
+                        meterText.setAttribute('fill', '#0d6efd');
+                    }
+                }
+            });
+
+            // Status Updates
+            if(totalRes >= 999999) { 
+                renderWires(); 
+                setStatus('idle', '状态: 断路 (开关未闭合或线路未连通)'); 
+            }
             else if(totalRes === 0) {
                 let allResult = findAllConductingComps(graph, batP1, batP2);
-                if(!allResult.hasLoad) { renderWires(); setStatus('error', '⚠️ 警告: 电源短路！请立即断开开关。'); }
-                else { conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires(); setStatus('error', '⚠️ 用电器被短路！有导线直接绕过了用电器。'); }
+                if(!allResult.hasLoad) { 
+                    renderWires(); 
+                    setStatus('error', '⚠️ 警告: 电源短路！请立即断开开关。'); 
+                }
+                else { 
+                    renderWires(); 
+                    setStatus('error', '⚠️ 用电器被短路！有导线直接绕过了用电器。'); 
+                }
             } else {
-                lightBulbsAll(graph, batP1, batP2); conductingWireIds = findConductingWiresAll(graph, batP1, batP2); renderWires();
+                lightBulbsAll(graph, batP1, batP2); 
+                renderWires();
                 setStatus('success', '状态: 导通。实验正常进行。');
             }
 
