@@ -156,6 +156,7 @@
             border-radius: 6px;
             text-align: center;
             margin-bottom: 10px;
+            white-space: pre-wrap;
         }
         .status-idle { background: #e9ecef; color: #495057; }
         .status-success { background: #d1e7dd; color: #0f5132; }
@@ -272,9 +273,7 @@
 
     <!-- 底部控制区 -->
     <div class="footer-area">
-        <div id="status-display" class="status-box status-idle">
-            等待操作 (未连接电源)
-        </div>
+        <div id="status-display" class="status-box status-idle">等待操作 (未连接电源)</div>
         <div class="d-flex justify-content-between gap-2">
             <button class="btn btn-secondary flex-fill" onclick="showGuide()">操作指南</button>
             <button class="btn btn-danger flex-fill" onclick="resetCanvas()">重置画布</button>
@@ -521,7 +520,6 @@
                     const def = CompDefs[type];
                     const world = screenToWorld(pt.x, pt.y);
                     
-                    // 【修复对齐】通过引脚位置补偿，确保拖出元件时其引脚强制落入背景交叉点上
                     let pinOffsetX = def.pins[0].x;
                     let pinOffsetY = def.pins[0].y;
                     const comp = {
@@ -628,26 +626,6 @@
             return { x: Math.round((c.x + p.x) / gridSize) * gridSize, y: Math.round((c.y + p.y) / gridSize) * gridSize };
         }
 
-        function calculateFlowDistMap(startPin) {
-            let distMap = {};
-            components.forEach(c => c.def.pins.forEach(p => { distMap[`${c.id}_${p.id}`] = Infinity; }));
-            let { graph } = buildGraph({}); 
-            let queue = [startPin];
-            distMap[startPin] = 0;
-            
-            while(queue.length > 0) {
-                let u = queue.shift();
-                if(!graph[u]) continue;
-                for(let edge of graph[u]) {
-                    if(edge.res < 999999 && distMap[edge.to] === Infinity) {
-                        distMap[edge.to] = distMap[u] + 1;
-                        queue.push(edge.to);
-                    }
-                }
-            }
-            return distMap;
-        }
-
         // --- 核心：连线自动正交寻路与重绘 ---
         function getPinDir(pinId) {
             const cId = pinId.substring(0, pinId.lastIndexOf('_'));
@@ -656,8 +634,8 @@
             if(!comp) return {x: 1, y: 0};
             const pin = comp.def.pins.find(p => p.id === pId);
             if(pin && pin.dir) return pin.dir;
-            if(pin && pin.x < comp.def.width / 2) return {x: -1, y: 0}; // 左侧引脚朝左
-            return {x: 1, y: 0}; // 右侧引脚朝右
+            if(pin && pin.x < comp.def.width / 2) return {x: -1, y: 0};
+            return {x: 1, y: 0};
         }
 
         function findAStarPath(start, end) {
@@ -688,7 +666,6 @@
                     let cy = c.y / gridSize;
                     let cw = c.def.width / gridSize;
                     let ch = c.def.height / gridSize;
-                    // 严格区间判断，允许引脚和边框周围通行，避开中心实体
                     return x > cx && x < cx + cw && y > cy && y < cy + ch;
                 });
             };
@@ -722,7 +699,6 @@
                     while(cameFrom.has(hash(path[0]))) {
                         path.unshift(cameFrom.get(hash(path[0])));
                     }
-                    // 路径简化：合并直线段
                     let simplifiedPath = [path[0]];
                     let lastDir = null;
                     for(let i=1; i<path.length; i++){
@@ -746,7 +722,7 @@
                     if (cameFrom.has(currentHash)) {
                         let prev = cameFrom.get(currentHash);
                         let prevDir = {x: current.x - prev.x, y: current.y - prev.y};
-                        if (prevDir.x !== dir.x || prevDir.y !== dir.y) turnPenalty = 5; // 拐弯惩罚，促使线路平直
+                        if (prevDir.x !== dir.x || prevDir.y !== dir.y) turnPenalty = 5; 
                     }
 
                     let t_gScore = gScore.get(currentHash) + moveCost + turnPenalty;
@@ -769,19 +745,17 @@
             let dir1 = getPinDir(p1Id);
             let dir2 = p2Id ? getPinDir(p2Id) : null;
 
-            // 为了线路好看，强制向引脚方向先延伸一格
             let ext1 = {x: c1.x + dir1.x * gridSize, y: c1.y + dir1.y * gridSize};
             let ext2 = dir2 ? {x: c2.x + dir2.x * gridSize, y: c2.y + dir2.y * gridSize} : {x: Math.round(c2.x/gridSize)*gridSize, y: Math.round(c2.y/gridSize)*gridSize};
 
             let path = findAStarPath(ext1, ext2);
             if (!path) {
-                // 如果寻路失败，回退到简单的直角折线
                 let midX = Math.round((ext1.x + ext2.x) / 2 / gridSize) * gridSize;
                 path = [ext1, {x: midX, y: ext1.y}, {x: midX, y: ext2.y}, ext2];
             }
             
             path.unshift(c1);
-            if(dir2) path.push(c2); else path.push({x: c2.x, y: c2.y}); // 加入末尾坐标
+            if(dir2) path.push(c2); else path.push({x: c2.x, y: c2.y}); 
 
             let d = `M ${path[0].x} ${path[0].y}`;
             for(let i=1; i<path.length; i++) {
@@ -796,12 +770,10 @@
                 const c1 = getPinCoords(wire.p1);
                 const c2 = getPinCoords(wire.p2);
                 
-                // 运用 A* 生成曼哈顿正交线路
                 const pathData = getPathData(wire.p1, c1, wire.p2, c2);
 
                 const wireGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 
-                // 辅助点击的宽阔隐形线 (避免折线太细点不到)
                 const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 clickArea.setAttribute('d', pathData);
                 clickArea.setAttribute('class', 'wire-click-area');
@@ -932,7 +904,6 @@
                     trashCan.classList.remove('active'); isHoveringTrash = false;
                 }
 
-                // 【修复对齐】通过引脚偏移量做逆向补偿，确保拖拽时无论什么尺寸，第一引脚永远套入格点
                 let pinOffsetX = draggingComp.def.pins[0].x;
                 let pinOffsetY = draggingComp.def.pins[0].y;
                 let rawX = world.x - dragOffset.x;
@@ -1099,7 +1070,27 @@
             return { comps: conductingComps, wireEdges: conductingEdges, totalRes: dist[endPin], hasLoad };
         }
 
-        function checkRangeError(battery, totalRes) {
+        // 核心修复1：使用真实的物理等电位网络去寻找并联（防误判本身短路的情况）
+        function getZeroResCluster(graph, startPin, ignoreCompId) {
+            let cluster = new Set();
+            let queue = [startPin];
+            cluster.add(startPin);
+            while(queue.length > 0) {
+                let u = queue.shift();
+                if(!graph[u]) continue;
+                for(let edge of graph[u]) {
+                    if(edge.comp && edge.comp.id === ignoreCompId) continue; // 屏蔽电表自身通道
+                    if(edge.res === 0 && !cluster.has(edge.to)) {
+                        cluster.add(edge.to);
+                        queue.push(edge.to);
+                    }
+                }
+            }
+            return cluster;
+        }
+
+        // 核心修复2：基于节点电压差（dijkstra dist差值）来准确测算测量电压
+        function checkRangeError(battery, totalRes, dist) {
             if(!battery || totalRes <= 0 || totalRes >= 999999) return [];
             const voltage = 1.5, current = voltage / totalRes;
             let faults = [];
@@ -1109,23 +1100,15 @@
                     else if(current < 0.02) faults.push(`电流表(${c.id})偏转过小(电流${current.toFixed(3)}A)，应换小量程`);
                 }
                 if(c.type === 'voltmeter') {
-                    let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`, p1Conn = [], p2Conn = [];
-                    wires.forEach(w => {
-                        if(w.p1 === cp1 || w.p2 === cp1) p1Conn.push(w.p1 === cp1 ? w.p2 : w.p1);
-                        if(w.p1 === cp2 || w.p2 === cp2) p2Conn.push(w.p1 === cp2 ? w.p2 : w.p1);
-                    });
-                    let measuredComps = new Set();
-                    p1Conn.forEach(pin => measuredComps.add(pin.substring(0, pin.lastIndexOf('_'))));
-                    p2Conn.forEach(pin => measuredComps.add(pin.substring(0, pin.lastIndexOf('_'))));
-                    
-                    let measuredRes = 0;
-                    measuredComps.forEach(cid => {
-                        let mc = components.find(x => x.id === cid);
-                        if(mc && (mc.type === 'bulb' || mc.type === 'resistor')) measuredRes += mc.def.res;
-                    });
-                    let measuredV = current * measuredRes;
-                    if(measuredV > 3) faults.push(`电压表(${c.id})量程过小(电压${measuredV.toFixed(2)}V > 3V量程)，可能烧毁`);
-                    else if(measuredV > 0 && measuredV < 0.1) faults.push(`电压表(${c.id})偏转过小(电压${measuredV.toFixed(2)}V)，应换小量程`);
+                    let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
+                    let d1 = dist[cp1] !== undefined ? dist[cp1] : Infinity;
+                    let d2 = dist[cp2] !== undefined ? dist[cp2] : Infinity;
+                    let measuredV = 0;
+                    if(d1 !== Infinity && d2 !== Infinity) {
+                        measuredV = current * Math.abs(d1 - d2);
+                    }
+                    if(measuredV > 3) faults.push(`电压表(${c.id})量程过小(测得电压${measuredV.toFixed(2)}V > 3V量程)，可能烧毁`);
+                    else if(measuredV > 0 && measuredV < 0.1) faults.push(`电压表(${c.id})偏转过小(测得电压${measuredV.toFixed(2)}V)，应换小量程`);
                 }
             });
             return faults;
@@ -1157,20 +1140,27 @@
                 if(dijkstra(closedGraph, batP1, batP2).dist[batP2] >= 999999) allFaults.push('断路: 即使闭合所有开关，电路仍不连通，请检查导线。');
             }
 
-            if(totalRes > 0 && totalRes < 999999) allFaults = allFaults.concat(checkRangeError(battery, totalRes));
+            if(totalRes > 0 && totalRes < 999999) allFaults = allFaults.concat(checkRangeError(battery, totalRes, dist));
 
             components.forEach(c => {
                 if(c.type === 'ammeter') {
                     const cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
-                    let p1Neighbors = wires.filter(w => w.p1 === cp1 || w.p2 === cp1).map(w => w.p1 === cp1 ? w.p2 : w.p1);
-                    let p2Neighbors = wires.filter(w => w.p1 === cp2 || w.p2 === cp2).map(w => w.p1 === cp2 ? w.p2 : w.p1);
-                    let p1CompIds = new Set(p1Neighbors.map(pin => pin.substring(0, pin.lastIndexOf('_'))));
-                    let p2CompIds = new Set(p2Neighbors.map(pin => pin.substring(0, pin.lastIndexOf('_'))));
-                    
-                    [...p1CompIds].filter(id => p2CompIds.has(id)).forEach(cid => {
-                        let mc = components.find(x => x.id === cid);
-                        if(mc && (mc.type === 'bulb' || mc.type === 'resistor')) allFaults.push(`电流表(${c.id})并联在了${mc.type === 'bulb' ? '灯泡' : '电阻'}(${mc.id})两端，应串联使用。`);
-                    });
+                    // 找出与电流表左右两端相连的物理“等电位节点集合” (不通过电流表自身)
+                    let cluster1 = getZeroResCluster(graph, cp1, c.id);
+                    let cluster2 = getZeroResCluster(graph, cp2, c.id);
+
+                    // 如果自身被短路，则 cluster1 中会包含 cp2，此时并非在测量用电器的“并联”
+                    if (!cluster1.has(cp2)) {
+                        components.forEach(mc => {
+                            if(mc.type === 'bulb' || mc.type === 'resistor') {
+                                let mp1 = `${mc.id}_p1`, mp2 = `${mc.id}_p2`;
+                                // 当用电器的两端分别被囊括在了电流表的两端电位网络中时，才属于真“并联”
+                                if ((cluster1.has(mp1) && cluster2.has(mp2)) || (cluster1.has(mp2) && cluster2.has(mp1))) {
+                                    allFaults.push(`电流表(${c.id})并联在了${mc.type === 'bulb' ? '灯泡' : '定值电阻'}(${mc.id})两端，应串联使用。`);
+                                }
+                            }
+                        });
+                    }
                 }
                 if(c.type === 'voltmeter') {
                     let { graph: testGraph } = buildGraph({});
@@ -1207,13 +1197,20 @@
 
             if(isFaultMode && faultSelect !== 'none') {
                 if(faultSelect === 'range_error') {
-                    let { graph: normalGraph } = buildGraph({}), normalRes = dijkstra(normalGraph, batP1, batP2).dist[batP2];
+                    let { graph: normalGraph } = buildGraph({}), { dist: normalDist } = dijkstra(normalGraph, batP1, batP2);
+                    let normalRes = normalDist[batP2];
                     if(normalRes > 0 && normalRes < 999999) {
                         lightBulbsAll(normalGraph, batP1, batP2); conductingWireIds = findConductingWiresAll(normalGraph, batP1, batP2); renderWires();
                         let voltage = 1.5, current = voltage / normalRes, msgs = [];
                         components.forEach(c => {
-                            if(c.type === 'ammeter') msgs.push(`电流表(${c.id}): 电流${current.toFixed(3)}A，${current > 0.6 ? '超量程' : current < 0.06 ? '偏转太小' : '正常'}`);
-                            if(c.type === 'voltmeter') msgs.push(`电压表(${c.id}): 测得电压约${voltage.toFixed(1)}V，若量程3V则${voltage > 3 ? '超量程' : '正常'}`);
+                            if(c.type === 'ammeter') msgs.push(`电流表(${c.id}): 电流${current.toFixed(3)}A，${current > 0.6 ? '超量程' : current < 0.02 ? '偏转太小' : '正常'}`);
+                            if(c.type === 'voltmeter') {
+                                let cp1 = `${c.id}_p1`, cp2 = `${c.id}_p2`;
+                                let d1 = normalDist[cp1] !== undefined ? normalDist[cp1] : Infinity;
+                                let d2 = normalDist[cp2] !== undefined ? normalDist[cp2] : Infinity;
+                                let measuredV = (d1 !== Infinity && d2 !== Infinity) ? current * Math.abs(d1 - d2) : 0;
+                                msgs.push(`电压表(${c.id}): 测得电压约${measuredV.toFixed(1)}V，若量程3V则${measuredV > 3 ? '超量程' : '正常'}`);
+                            }
                         });
                         if(msgs.length === 0) return setStatus('error', '⚠️ 电路中没有电表，无法模拟量程故障。');
                         return setStatus('error', '⚠️ 量程分析:\n' + msgs.join('\n'));
